@@ -11,6 +11,10 @@ PORT_CENTRAL = 10008
 PORT_DISTRIBUTED = 10108
 
 
+def supress_alarm(*_):
+    ...
+
+
 async def alarm_handle(reader, writer):
     try:
         while True:
@@ -26,10 +30,14 @@ async def alarm_handle(reader, writer):
 
 
 async def states_handle(reader, writer):
+    signal.setitimer(signal.ITIMER_REAL, 1)
+
     try:
         while True:
+            signal.sigwait([signal.SIGALRM])
+            signal.setitimer(signal.ITIMER_REAL, 1)
+
             data = await reader.readexactly(1)
-            await asyncio.sleep(1)
 
             print('estado atualizado')
     except (asyncio.CancelledError, asyncio.IncompleteReadError):
@@ -54,6 +62,8 @@ async def connection_handle(reader, writer):
     except asyncio.CancelledError:
         await states_task.cancel()
         await alarm_task.cancel()
+
+        await asyncio.sleep(1)  # Let tasks finish
     finally:
         logging.info(f"Closed connection to {host}:{port}")
 
@@ -71,6 +81,8 @@ async def main():
 
 
 if __name__ == '__main__':
+    signal.signal(signal.SIGALRM, supress_alarm)
+
     logging.getLogger().setLevel(logging.DEBUG)
 
     try:
