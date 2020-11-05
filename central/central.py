@@ -16,11 +16,14 @@ PORT_CENTRAL = 10008
 PORT_DISTRIBUTED = 10108
 
 CommandType = Enum('CommandType', 'ON OFF AUTO')
+DeviceType = Enum('DeviceType', 'SENSOR_OPENNING SENSOR_PRESENCE LAMP AIR_CONDITIONING')
 
 
 class Command(NamedTuple):
     type_ : CommandType
-    value: float = -1
+    device_type : DeviceType
+    device_id : int  # until 63
+    value: float = -1  # Auxiliar for AUTO
     
 
 async def play_alarm():
@@ -42,12 +45,18 @@ async def commands_handler(writer, queue):
     while True:
         command = await queue.get()
 
+        assert command.device_id <= 63, 'Invalid Device ID'
+
+        command_args = list(command)
+        command_args[0] = command.type_.value
+        command_args[1] = command.device_type.value
+
         if command.type_ == CommandType.AUTO:
-            struct = Struct('If')
-            command_bytes = struct.pack(command.type_.value, command.value)
+            struct = Struct('<BBBf')
+            command_bytes = struct.pack(*command_args)
         else:
-            type_ = command.type_.value
-            command_bytes = type_.to_bytes(4, 'little')
+            struct = Struct('<BBB')
+            command_bytes = struct.pack(*command_args[:-1])
 
         writer.write(command_bytes)
         print('COMANDO ENVIADO')
@@ -87,14 +96,20 @@ async def connection_handler(reader, writer, commands_queue):
 
 async def get_user_command(commands_queue):
     while True:
-        await asyncio.sleep(random.randint(3, 8))
-        type_ = random.choice([CommandType.ON, CommandType.OFF, CommandType.AUTO])
+        await asyncio.sleep(random.randint(1, 5))
+
+        type_ = CommandType(random.randint(1, len(CommandType)))
+        device_type = DeviceType(random.randint(1, len(DeviceType)))
+        device_id = random.randint(1, 63)
+
 
         value = -1
         if type_ == CommandType.AUTO:
             value = random.randint(0, 50)
+            device_type = DeviceType.AIR_CONDITIONING  # The only available
 
-        await commands_queue.put(Command(type_, value))
+        command = Command(type_, device_type, device_id, value)
+        await commands_queue.put(command)
 
 
 async def main():
