@@ -4,7 +4,7 @@ import asyncio
 import signal
 import logging
 import random
-from struct import Struct
+import struct
 from functools import partial
 from enum import Enum
 from typing import NamedTuple
@@ -17,6 +17,8 @@ PORT_DISTRIBUTED = 10108
 
 CommandType = Enum('CommandType', 'ON OFF AUTO')
 DeviceType = Enum('DeviceType', 'SENSOR_OPENNING SENSOR_PRESENCE LAMP AIR_CONDITIONING')
+
+ALARM_TYPES = (DeviceType.SENSOR_OPENNING, DeviceType.SENSOR_PRESENCE)
 
 
 class Command(NamedTuple):
@@ -32,13 +34,17 @@ async def play_alarm():
 
 async def states_handler(reader):
     while True:
-        states = await reader.readexactly(1)
-        await asyncio.sleep(1)
+        states_struct = struct.Struct('<BQ')
 
-        if False: #TODO
-            play_alarm()
+        payload = await reader.readexactly(states_struct.size)
+        device_type, states = states_struct.unpack(payload)
 
-        print('ESTADO RECEBIDO')
+        device_type = DeviceType(device_type)
+
+        if device_type in ALARM_TYPES:
+            await play_alarm()
+
+        print(f'TIPO DE DISPOSITIVO: {device_type} <-> ESTADO RECEBIDO: {states:064b}')
 
 
 async def commands_handler(writer, queue):
@@ -52,11 +58,9 @@ async def commands_handler(writer, queue):
         command_args[1] = command.device_type.value
 
         if command.type_ == CommandType.AUTO:
-            struct = Struct('<BBBf')
-            command_bytes = struct.pack(*command_args)
+            command_bytes = struct.pack('<BBBf', *command_args)
         else:
-            struct = Struct('<BBB')
-            command_bytes = struct.pack(*command_args[:-1])
+            command_bytes = struct.pack('<BBB', *command_args[:-1])
 
         writer.write(command_bytes)
         print('COMANDO ENVIADO')
@@ -101,7 +105,6 @@ async def get_user_command(commands_queue):
         type_ = CommandType(random.randint(1, len(CommandType)))
         device_type = DeviceType(random.randint(1, len(DeviceType)))
         device_id = random.randint(1, 63)
-
 
         value = -1
         if type_ == CommandType.AUTO:
