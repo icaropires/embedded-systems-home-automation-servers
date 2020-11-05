@@ -3,6 +3,11 @@
 import asyncio
 import signal
 import logging
+import random
+from struct import Struct
+from functools import partial
+from enum import Enum
+from typing import NamedTuple
 
 
 HOST_CENTRAL = ''
@@ -10,58 +15,94 @@ PORT_CENTRAL = 10008
 
 PORT_DISTRIBUTED = 10108
 
-
-async def alarm_handle(reader, writer):
-    try:
-        while True:
-            data = await reader.readexactly(1)
-            print('Alarme disparado')
-    except (asyncio.CancelledError, asyncio.IncompleteReadError):
-        ...
-    finally:
-        writer.close()
-        await writer.wait_closed()
-
-        logging.info("alarm handle ended")
+CommandType = Enum('CommandType', 'ON OFF AUTO')
 
 
-async def states_handle(reader, writer):
-    try:
-        while True:
-            data = await reader.readexactly(1)
-            await asyncio.sleep(1)
+class Command(NamedTuple):
+    type_ : CommandType
+    value: float = -1
+    
 
-            print('estado atualizado')
-    except (asyncio.CancelledError, asyncio.IncompleteReadError):
-        ...
-    finally:
-        writer.close()
-        await writer.wait_closed()
-
-        logging.info("States handle ended")
+async def play_alarm():
+    print("ALARM!!!!")
 
 
-async def connection_handle(reader, writer):
+async def states_handler(reader):
+    while True:
+        states = await reader.readexactly(1)
+        await asyncio.sleep(1)
+
+        if False: #TODO
+            play_alarm()
+
+        print('ESTADO RECEBIDO')
+
+
+async def commands_handler(writer, queue):
+    while True:
+        command = await queue.get()
+
+        if command.type_ == CommandType.AUTO:
+            struct = Struct('If')
+            command_bytes = struct.pack(command.type_.value, command.value)
+        else:
+            type_ = command.type_.value
+            command_bytes = type_.to_bytes(4, 'little')
+
+        writer.write(command_bytes)
+        print('COMANDO ENVIADO')
+        await writer.drain()
+
+
+async def connection_handler(reader, writer, commands_queue):
     host, port, *_ = writer.get_extra_info('peername')
 
-    states_task = asyncio.create_task(alarm_handle(reader, writer))
+    # Exclusive connection for pushing commands
+    #   maybe could be the same server connection, but this is more resistant
+    #   to protocol changes
+    _, push_writer = await asyncio.open_connection(host, PORT_DISTRIBUTED)
 
-    alarm_reader, alarm_writer = await asyncio.open_connection(host, PORT_DISTRIBUTED)
-    alarm_task = asyncio.create_task(states_handle(alarm_reader, alarm_writer))
+    tasks = asyncio.gather(
+        get_user_command(commands_queue),
+        commands_handler(push_writer, commands_queue),
+
+        states_handler(reader),
+    )
 
     try:
-        await asyncio.wait([states_task, alarm_task], return_when=asyncio.FIRST_COMPLETED)
+        await tasks
     except asyncio.CancelledError:
-        await states_task.cancel()
-        await alarm_task.cancel()
+        tasks.cancel()
+
+    try:
+        await tasks
+    except asyncio.CancelledError:
+        ...
     finally:
-        logging.info(f"Closed connection to {host}:{port}")
+        writer.close()
+        await writer.wait_closed()
+
+        logging.info("Closed connection to %s:%s", host, port)
+
+
+async def get_user_command(commands_queue):
+    while True:
+        await asyncio.sleep(random.randint(3, 8))
+        type_ = random.choice([CommandType.ON, CommandType.OFF, CommandType.AUTO])
+
+        value = -1
+        if type_ == CommandType.AUTO:
+            value = random.randint(0, 50)
+
+        await commands_queue.put(Command(type_, value))
 
 
 async def main():
-    server = await asyncio.start_server(
-        connection_handle, HOST_CENTRAL, PORT_CENTRAL
-    )
+    max_queue_size = 10
+    commands_queue = asyncio.Queue(max_queue_size)
+    command_callback = partial(connection_handler, commands_queue=commands_queue)
+
+    server = await asyncio.start_server(command_callback, HOST_CENTRAL, PORT_CENTRAL)
 
     host, port, *_ = server.sockets[0].getsockname()
     logging.info('Waiting for connections on %s:%s ...', host, port)

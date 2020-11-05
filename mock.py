@@ -3,7 +3,9 @@
 import random
 import threading
 import socket
-import time
+from time import sleep
+from struct import Struct
+from enum import Enum
 
 
 HOST_CENTRAL = ''
@@ -11,33 +13,45 @@ PORT_CENTRAL = 10008
 
 PORT_DISTRIBUTED = 10108
 
-
-def states_handle(conn):
-    while True:
-        conn.send(b'1')
-        time.sleep(1)
-        print('estado atualizado')
+CommandType = Enum('CommandType', 'ON OFF AUTO')
 
 
-def activate_alarm():
+def states_handler():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((HOST_CENTRAL, PORT_CENTRAL))
 
         while True:
-            time.sleep(random.randint(3, 8))
+            sleep(1)
             s.send(b'1')
-            print('alarme disparado')
+            print('estados atualizados')
 
 
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    s.bind(('', PORT_DISTRIBUTED))
-    s.listen()
+def commands_handler(conn):
+    while True:
+        command = conn.recv(4)
 
-    threading.Thread(target=activate_alarm, daemon=True).start()
-    conn, addr = s.accept()
+        type_ = int.from_bytes(command, 'little')
+        type_ = CommandType(type_)
 
-    with conn:
-        t_states = threading.Thread(target=states_handle, args=[conn])
-        t_states.start()
+        if type_ == CommandType.AUTO:
+            value = conn.recv(4)
+            value, *_ = Struct('f').unpack(value)
 
-        t_states.join()
+            print(f'comando = {type_!s}, temperatura = {value}')
+
+        print(f'comando = {type_!s}')
+
+
+def main():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(('', PORT_DISTRIBUTED))
+        s.listen()
+
+        threading.Thread(target=states_handler, daemon=True).start()
+        conn, addr = s.accept()
+
+        with conn:
+            commands_handler(conn)
+
+if __name__ == '__main__':
+    main()
