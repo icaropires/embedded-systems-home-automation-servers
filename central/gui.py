@@ -9,35 +9,52 @@ from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.widgets import Checkbox, Frame, CheckboxList, Label
 from prompt_toolkit.formatted_text import HTML
+from prompt_toolkit import print_formatted_text as print
+from prompt_toolkit.shortcuts import yes_no_dialog
 
 
 
 class Gui:
 
-    bindings = KeyBindings()
-
     class CheckboxListNoScroll(CheckboxList):
         show_scrollbar = False
 
-    def __init__(self):
-        self.devices_names = {i: f'device{i}' for i in range(1, 11)}
+    def __init__(self, devices, states_queue, commands_queue):
+        self.states_queue = states_queue
+        self.commands_queue = commands_queue
 
-        self.temperature_umidity = FormattedTextControl('')
-        self.devices_states = self.CheckboxListNoScroll(
-            [[i, self.devices_names[i]]
-                for i in range(1, 11)]
-        )
+        self._devices_names = dict(devices)
 
-    @bindings.add('q')
-    def exit_(event):
-        event.app.exit()
+        self._temperature_umidity = FormattedTextControl('')
+        self._devices_states = self.CheckboxListNoScroll(devices)
+        self._status = FormattedTextControl('')
+
+        self.bindings = KeyBindings()
+
+        @self.bindings.add('q')
+        def exit_(event):
+            event.app.exit()
+
+        @self.bindings.add('c-p')
+        def submit_command(_):
+            selected_values = self._devices_states.current_values
+
+            asyncio.gather(
+                self.commands_queue.put(selected_values),
+                self.show_status('States submitted!')
+            )
+
+    async def show_status(self, text):
+        self._status.text = HTML(text)
+        await asyncio.sleep(1)
+        self._status.text = ''
 
     def update_temperature_umidity(self):
         temperature = float(random.randint(0, 50))
         umidity = float(random.randint(0, 100))
         reference_temperature = '-'
 
-        self.temperature_umidity.text = HTML(
+        self._temperature_umidity.text = HTML(
             "\n<b>Environment:</b>\n\n"
             f"<i>Temperature:</i> {temperature}\n"
             f"<i>Umidity:</i> {umidity}\n"
@@ -45,10 +62,10 @@ class Gui:
         )
 
     def update_devices_states(self):
-        for i, (id_, _) in enumerate(self.devices_states.values):
-            name = self.devices_names[id_]
+        for i, (id_, _) in enumerate(self._devices_states.values):
+            name = self._devices_names[id_]
             color = random.choice(('red', 'green'))
-            self.devices_states.values[i][1] = HTML(f'<{color}>{name}</{color}>')
+            self._devices_states.values[i][1] = HTML(f'<{color}>{name}</{color}>')
 
     async def update_states(self):
         while True:
@@ -58,25 +75,31 @@ class Gui:
             await asyncio.sleep(1)
 
     async def start(self):
+        devices_states = VSplit(
+            [
+                HSplit([
+                    Label(HTML("\n<b>Choose the actives:</b>"), width=20),
+                    VSplit([self._devices_states]),
+                    Label(
+                        HTML(
+                            "<b>Device Colors</b>\n"
+                            "    <i><green>Green:</green></i> active\n"
+                            "    <i><red>Red:</red></i> inactive"
+                        )
+                    ),
+                    
+                ], padding=1),
+                Window(self._temperature_umidity, width=30),
+            ],
+            padding_char=' ', padding=3
+        )
+
         root_container = VSplit([Frame(  # I know, not pretty
             title="Control Dashboard",
-            body=VSplit(
-                [
-                    HSplit([
-                        Label(HTML("\n<b>Choose the actives:</b>"), width=20),
-                        VSplit([self.devices_states]),
-                        Label(
-                            HTML(
-                                "<b>Device Colors</b>\n"
-                                "    <i>Green:</i> active\n"
-                                "    <i>Red:</i> inactive"
-                            )
-                        ),
-                    ], padding=1),
-                    Window(self.temperature_umidity, width=30)
-                ],
-                padding_char=' ', padding=3
-            )
+            body=HSplit([
+                devices_states,
+                Window(self._status, height=1, width=50, style='bg:#222222')
+            ], padding=1)
         )], width=20, align="LEFT")
 
         layout = Layout(root_container)
@@ -95,5 +118,11 @@ class Gui:
         )
 
 if __name__ == '__main__':
-    gui = Gui()
+    devices = [
+        [(1, 3), 'dev1'],
+        [(2, 4), 'dev2'],
+        [(3, 10), 'dev3'],
+    ]
+    gui = Gui(devices, asyncio.Queue(), asyncio.Queue())
+
     asyncio.run(gui.start())
