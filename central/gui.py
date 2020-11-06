@@ -13,7 +13,6 @@ from prompt_toolkit import print_formatted_text as print
 from prompt_toolkit.shortcuts import yes_no_dialog
 
 
-
 class Gui:
 
     class CheckboxListNoScroll(CheckboxList):
@@ -23,11 +22,12 @@ class Gui:
         self.states_queue = states_queue
         self.commands_queue = commands_queue
 
-        self._devices_names = dict(devices)
+        self._devices = self.gen_devices_dict(devices)
+        devices_list = [[id_, d.name] for id_, d in self._devices.items()]
 
         self._temperature_umidity = FormattedTextControl('')
-        self._devices_states = self.CheckboxListNoScroll(devices)
         self._status = FormattedTextControl('')
+        self._devices_states = self.CheckboxListNoScroll(devices_list)
 
         self.bindings = KeyBindings()
 
@@ -38,16 +38,16 @@ class Gui:
         @self.bindings.add('c-p')
         def submit_command(_):
             selected_values = self._devices_states.current_values
+            selected_values = [self._devices[id_] for id_ in selected_values]
 
             asyncio.gather(
                 self.commands_queue.put(selected_values),
                 self.show_status('States submitted!')
             )
 
-    async def show_status(self, text):
-        self._status.text = HTML(text)
-        await asyncio.sleep(1)
-        self._status.text = ''
+    @staticmethod
+    def gen_devices_dict(devices):
+        return {(d.type, d.id): d for d in devices}
 
     def update_temperature_umidity(self):
         temperature = float(random.randint(0, 50))
@@ -63,7 +63,7 @@ class Gui:
 
     def update_devices_states(self):
         for i, (id_, _) in enumerate(self._devices_states.values):
-            name = self._devices_names[id_]
+            name = self._devices[id_].name
             color = random.choice(('red', 'green'))
             self._devices_states.values[i][1] = HTML(f'<{color}>{name}</{color}>')
 
@@ -73,6 +73,11 @@ class Gui:
             self.update_temperature_umidity()
 
             await asyncio.sleep(1)
+
+    async def show_status(self, text):
+        self._status.text = HTML(text)
+        await asyncio.sleep(1)
+        self._status.text = ''
 
     async def start(self):
         devices_states = VSplit(
@@ -116,13 +121,3 @@ class Gui:
             self.update_states(),
             application.run_async(),
         )
-
-if __name__ == '__main__':
-    devices = [
-        [(1, 3), 'dev1'],
-        [(2, 4), 'dev2'],
-        [(3, 10), 'dev3'],
-    ]
-    gui = Gui(devices, asyncio.Queue(), asyncio.Queue())
-
-    asyncio.run(gui.start())

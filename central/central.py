@@ -6,23 +6,19 @@ import logging
 import random
 import struct
 from functools import partial
-from enum import Enum
 from typing import NamedTuple
 from collections import defaultdict
 
 from gui import Gui
-
-
-HOST_CENTRAL = ''
-PORT_CENTRAL = 10008
-
-PORT_DISTRIBUTED = 10108
-
-CommandType = Enum('CommandType', 'ON_OFF AUTO')
-DeviceType = Enum('DeviceType', 'SENSOR_OPENNING SENSOR_PRESENCE LAMP AIR_CONDITIONING')
-
-ALARM_TYPES = (DeviceType.SENSOR_OPENNING, DeviceType.SENSOR_PRESENCE)
-AUTO_DEVICE_NAME = 'Temperatura Automática'
+from constants import (
+    HOST_CENTRAL,
+    PORT_CENTRAL,
+    PORT_DISTRIBUTED,
+    CommandType,
+    DeviceType,
+    ALARM_TYPES,
+    AUTO_DEVICE_NAME,
+)
 
 
 class Device:
@@ -74,7 +70,7 @@ def devices_to_commands(devices):
         states[device.type] |= 1 << device.id
 
     commands = [
-        struct.pack('<BBB', CommandType.ON_OFF.value, t.value, s)
+        struct.pack('<BBB', CommandType.ON_OR_OFF.value, t.value, s)
         for t, s in states.items()
     ]
 
@@ -84,22 +80,21 @@ def devices_to_commands(devices):
     return commands
 
 
-async def get_user_commands(devices_dict, gui_commands_queue):
-    gui_command = await gui_commands_queue.get()
-
-    devices = [devices_dict[id_] for id_ in gui_command]
-    commands = devices_to_commands(devices)
+async def get_user_commands(gui_commands_queue):
+    selected_devices = await gui_commands_queue.get()
+    commands = devices_to_commands(selected_devices)
 
     return commands
 
 
-async def commands_handler(writer, devices_dict, queue):
+async def commands_handler(writer, queue):
     while True:
-        commands = await get_user_commands(devices_dict, queue)
+        commands = await get_user_commands(queue)
 
         for command in commands:
             writer.write(command)
-            await writer.drain()
+
+        await writer.drain()
 
 
 def get_registered_devices():
@@ -125,9 +120,6 @@ def get_registered_devices():
         Device('Sensor Abertura 06 (Janela Quarto 02)', DeviceType.SENSOR_OPENNING),
     ]
 
-def devices_to_gui(devices):
-    return [[(d.type, d.id), d.name] for d in devices]
-
 async def connection_handler(reader, writer):
     host, port, *_ = writer.get_extra_info('peername')
 
@@ -141,13 +133,11 @@ async def connection_handler(reader, writer):
     gui_commands_queue = asyncio.Queue(max_queue_size)
 
     devices = get_registered_devices()
-    devices_dict = {(d.type, d.id): d for d in devices}
-
-    gui = Gui(devices_to_gui(devices), states_queue, gui_commands_queue)
+    gui = Gui(devices, states_queue, gui_commands_queue)
 
     tasks = asyncio.gather(
         gui.start(),
-        commands_handler(push_writer, devices_dict, gui_commands_queue),
+        commands_handler(push_writer, gui_commands_queue),
         states_handler(reader),
     )
 

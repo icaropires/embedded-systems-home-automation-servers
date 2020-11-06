@@ -1,3 +1,10 @@
+__pycache__
+.py[co]
+env
+.env
+venv
+.venv
+
 # Prerequisites
 *.d
 

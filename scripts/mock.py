@@ -13,7 +13,7 @@ PORT_CENTRAL = 10008
 
 PORT_DISTRIBUTED = 10108
 
-CommandType = Enum('CommandType', 'ON OFF AUTO')
+CommandType = Enum('CommandType', 'ON_OR_OFF AUTO')
 DeviceType = Enum('DeviceType', 'SENSOR_OPENNING SENSOR_PRESENCE LAMP AIR_CONDITIONING')
 
 
