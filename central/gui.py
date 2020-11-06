@@ -81,9 +81,7 @@ class Gui:
     def gen_devices_dict(devices):
         return {(d.type, d.id): d for d in devices}
 
-    def update_temperature_umidity(self):
-        temperature = float(random.randint(0, 50))
-        umidity = float(random.randint(0, 100))
+    def update_temperature_umidity(self, temperature, umidity):
         reference_temperature = '-'
 
         self._temperature_umidity.text = HTML(
@@ -93,23 +91,38 @@ class Gui:
             f"<i>Reference Temperature:</i> {reference_temperature}"
         )
 
-    def update_devices_states(self):
-        for idx, (id_, _) in enumerate(self._active_devices_states.values):
+    def update_devices_states(self, new_states):
+        def get_name_str(id_):
             name = self._devices[id_].name
-            color = random.choice(('red', 'green'))
-            self._active_devices_states.values[idx][1] = HTML(f'<{color}>{name}</{color}>')
+            color = 'green' if new_states[id_] else 'red'
+
+            return HTML(f'<{color}>{name}</{color}>')
+
+        for idx, (id_, _) in enumerate(self._active_devices_states.values):
+            if id_ in new_states:
+                self._active_devices_states.values[idx][1] = get_name_str(id_)
 
         for id_ in self._passive_devices_dict:
-            name = self._devices[id_].name
-            color = random.choice(('red', 'green'))
-            self._passive_devices_dict[id_].content.text = HTML(f'<{color}>{name}</{color}>')
+            if id_ in new_states:
+                self._passive_devices_dict[id_].content.text = get_name_str(id_)
 
     async def update_states(self):
-        while self._is_running:
-            self.update_devices_states()
-            self.update_temperature_umidity()
+        def to_local_format(device_type, states):
+            'To format usually used in this class'
 
-            await asyncio.sleep(1)
+            return {(device_type, idx): value
+                    for idx, value in enumerate(reversed(states))}
+
+        while self._is_running:
+            new_states = await self.states_queue.get()
+            device_type, devices_states, temperature, umidity = new_states
+
+            devices_states = to_local_format(device_type, devices_states)
+
+            self.update_devices_states(devices_states)
+            self.update_temperature_umidity(temperature, umidity)
+
+            get_app().invalidate()  # Refresh
 
     async def show_status(self, text):
         self._status.text = HTML(text)
@@ -154,7 +167,7 @@ class Gui:
         application = Application(
             layout=layout,
             key_bindings=self._bindings,
-            refresh_interval=1,
+            # refresh_interval=1,  # Controlling manually
             full_screen=True
         )
 

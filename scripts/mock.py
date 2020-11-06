@@ -27,14 +27,25 @@ def states_handler():
         s.connect((HOST_CENTRAL, PORT_CENTRAL))
 
         while True:
-            device_type = random.randint(1, len(DeviceType))
-            device_states = random.randint(0, 2**64-1)
+            for device_type in DeviceType:
+                if device_type == DeviceType.AIR_CONDITIONING_AUTO:
+                    continue
 
-            states = struct.pack('<BQ', device_type, device_states)
-            s.send(states)
+                device_type = device_type.value
 
+                # Better diversity than randint
+                devices_states = ''.join(random.choice(['0', '1']) for _ in range(64))
+                devices_states = int(devices_states, 2)
+
+                temperature = float(random.randint(-20, 50))
+                umidity = float(random.randint(0, 100))
+
+                states = struct.pack('<BQff', device_type, devices_states, temperature, umidity)
+                s.send(states)
+
+                device_type = DeviceType(device_type)
+                print(f'Tipo dispositivo: {device_type}\nEstados: {devices_states:064b}\n')
             sleep(1)
-            print('estados atualizados')
 
 
 def commands_handler(conn):

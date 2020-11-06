@@ -58,9 +58,11 @@ class Server:
         self.logger = logging.getLogger('fse_server')
 
     async def states_handler(self, writer, reader, states_queue):
+        def decode_states(states):
+            return [s == '1' for s in f'{states:064b}']
+
         while True:
-            # TODO: Add temperature and umidity
-            states_struct = struct.Struct('<BQ')
+            states_struct = struct.Struct('<BQff')
 
             try:
                 payload = await reader.readexactly(states_struct.size)
@@ -74,14 +76,14 @@ class Server:
 
                 raise asyncio.CancelledError
 
-            device_type, states = states_struct.unpack(payload)
-
+            device_type, states, temperature, umidity = states_struct.unpack(payload)
             device_type = DeviceType(device_type)
 
             if device_type in ALARM_TYPES:
                 await play_alarm()
 
-            update_state(device_type, states)
+            states = decode_states(states)
+            await states_queue.put((device_type, states, temperature, umidity))
 
     def devices_to_commands(self, selected_devices):
         'Returns one command by type'
