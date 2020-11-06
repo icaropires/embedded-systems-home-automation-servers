@@ -29,11 +29,12 @@ class Gui:
         self._status = FormattedTextControl('')
         self._devices_states = self.CheckboxListNoScroll(devices_list)
 
+        self._is_running = True
         self.bindings = KeyBindings()
 
         @self.bindings.add('q')
-        def exit_(event):
-            event.app.exit()
+        def _(event):
+            self.stop()
 
         @self.bindings.add('c-p')
         def submit_command(_):
@@ -44,6 +45,12 @@ class Gui:
                 self.commands_queue.put(selected_values),
                 self.show_status('States submitted!')
             )
+
+    def stop(self):
+        self._is_running = False
+        asyncio.create_task(self.commands_queue.put(None))
+
+        get_app().exit()
 
     @staticmethod
     def gen_devices_dict(devices):
@@ -68,7 +75,7 @@ class Gui:
             self._devices_states.values[i][1] = HTML(f'<{color}>{name}</{color}>')
 
     async def update_states(self):
-        while True:
+        while self._is_running:
             self.update_devices_states()
             self.update_temperature_umidity()
 

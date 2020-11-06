@@ -44,134 +44,165 @@ def update_state(a, b):
     ...
 
 
-async def states_handler(reader):
-    while True:
-        # TODO: Add temperature and umidity
-        states_struct = struct.Struct('<BQ')
+class Server:
+    def __init__(self, host=HOST_CENTRAL, port=PORT_CENTRAL):
+        self.host = host
+        self.port = port
+        self.max_queue_size = 10
 
-        payload = await reader.readexactly(states_struct.size)
-        device_type, states = states_struct.unpack(payload)
+        self.devices = self.get_registered_devices()
 
-        device_type = DeviceType(device_type)
+        logging.basicConfig(
+            level=logging.INFO,
+            format="[%(levelname)s] %(asctime)s: %(message)s",
+        )
+        self.logger = logging.getLogger('fse_server')
 
-        if device_type in ALARM_TYPES:
-            await play_alarm()
+    async def states_handler(self, writer, reader, states_queue):
+        while True:
+            # TODO: Add temperature and umidity
+            states_struct = struct.Struct('<BQ')
 
-        update_state(device_type, states)
+            try:
+                payload = await reader.readexactly(states_struct.size)
+            except asyncio.IncompleteReadError:
+                host, port, *_ = writer.get_extra_info('peername')
 
-def devices_to_commands(devices):
-    'Returns one command by type'
-    states = {d.type: 0 for d in devices}
+                self.logger.error(
+                    "Probably %s:%s was interrupted. Dropping connection..",
+                    host, port
+                )
 
-    for device in devices:
-        if device.name == AUTO_DEVICE_NAME:
-            continue
+                raise asyncio.CancelledError
 
-        states[device.type] |= 1 << device.id
+            device_type, states = states_struct.unpack(payload)
 
-    commands = [
-        struct.pack('<BBB', CommandType.ON_OR_OFF.value, t.value, s)
-        for t, s in states.items()
-    ]
+            device_type = DeviceType(device_type)
 
-    # TODO: Add AUTO commands
-    # commands += []
+            if device_type in ALARM_TYPES:
+                await play_alarm()
 
-    return commands
+            update_state(device_type, states)
 
+    def devices_to_commands(self, devices):
+        'Returns one command by type'
+        states = {d.type: 0 for d in devices}
 
-async def get_user_commands(gui_commands_queue):
-    selected_devices = await gui_commands_queue.get()
-    commands = devices_to_commands(selected_devices)
+        for device in devices:
+            if device.name == AUTO_DEVICE_NAME:
+                continue
 
-    return commands
+            states[device.type] |= 1 << device.id
 
+        commands = [
+            struct.pack('<BBB', CommandType.ON_OR_OFF.value, t.value, s)
+            for t, s in states.items()
+        ]
 
-async def commands_handler(writer, queue):
-    while True:
-        commands = await get_user_commands(queue)
+        # TODO: Add AUTO commands
+        # commands += []
 
-        for command in commands:
-            writer.write(command)
+        return commands
 
-        await writer.drain()
+    async def get_user_commands(self, gui_commands_queue):
+        selected_devices = await gui_commands_queue.get()
 
+        if selected_devices is None:
+            return selected_devices
 
-def get_registered_devices():
-    # For now, static
-    return [
-        # Manually activables
-        Device('Lâmpada 01 (Cozinha)', DeviceType.LAMP),
-        Device('Lâmpada 02 (Sala)', DeviceType.LAMP),
-        Device('Lâmpada 03 (Quarto 01)', DeviceType.LAMP),
-        Device('Lâmpada 04 (Quarto 02)', DeviceType.LAMP),
-        Device('Ar-Condicionado 01 (Quarto 01)', DeviceType.AIR_CONDITIONING),
-        Device('Ar-Condicionado 02 (Quarto 02)', DeviceType.AIR_CONDITIONING),
-        Device(AUTO_DEVICE_NAME, DeviceType.AIR_CONDITIONING),
+        commands = self.devices_to_commands(selected_devices)
 
-        # Passives #TODO: Differentiate on interface
-        Device('Sensor de Presença 01 (Sala)', DeviceType.SENSOR_PRESENCE),
-        Device('Sensor de Presença 02 (Cozinha)', DeviceType.SENSOR_PRESENCE),
-        Device('Sensor Abertura 01 (Porta Cozinha)', DeviceType.SENSOR_OPENNING),
-        Device('Sensor Abertura 02 (Janela Cozinha)', DeviceType.SENSOR_OPENNING),
-        Device('Sensor Abertura 03 (Porta Sala)', DeviceType.SENSOR_OPENNING),
-        Device('Sensor Abertura 04 (Janela Sala)', DeviceType.SENSOR_OPENNING),
-        Device('Sensor Abertura 05 (Janela Quarto 01)', DeviceType.SENSOR_OPENNING),
-        Device('Sensor Abertura 06 (Janela Quarto 02)', DeviceType.SENSOR_OPENNING),
-    ]
+        return commands
 
-async def connection_handler(reader, writer):
-    host, port, *_ = writer.get_extra_info('peername')
+    async def commands_handler(self, writer, gui_commands_queue):
+        while True:
+            commands = await self.get_user_commands(gui_commands_queue)
 
-    # Exclusive connection for pushing commands
-    #   maybe could be the same server connection, but this is more resistant
-    #   to protocol changes
-    _, push_writer = await asyncio.open_connection(host, PORT_DISTRIBUTED)
+            if commands is None:
+                break
 
-    max_queue_size = 10
-    states_queue = asyncio.Queue(max_queue_size)
-    gui_commands_queue = asyncio.Queue(max_queue_size)
+            for command in commands:
+                writer.write(command)
 
-    devices = get_registered_devices()
-    gui = Gui(devices, states_queue, gui_commands_queue)
+            await writer.drain()
 
-    tasks = asyncio.gather(
-        gui.start(),
-        commands_handler(push_writer, gui_commands_queue),
-        states_handler(reader),
-    )
+    @staticmethod
+    def get_registered_devices():
+        # Also could not be just static
+        return [
+            # Manually activables
+            Device('Lâmpada 01 (Cozinha)', DeviceType.LAMP),
+            Device('Lâmpada 02 (Sala)', DeviceType.LAMP),
+            Device('Lâmpada 03 (Quarto 01)', DeviceType.LAMP),
+            Device('Lâmpada 04 (Quarto 02)', DeviceType.LAMP),
+            Device('Ar-Condicionado 01 (Quarto 01)', DeviceType.AIR_CONDITIONING),
+            Device('Ar-Condicionado 02 (Quarto 02)', DeviceType.AIR_CONDITIONING),
+            Device(AUTO_DEVICE_NAME, DeviceType.AIR_CONDITIONING),
 
-    try:
-        await tasks
-    except asyncio.CancelledError:
-        tasks.cancel()
+            # Passives #TODO: Differentiate on interface
+            Device('Sensor de Presença 01 (Sala)', DeviceType.SENSOR_PRESENCE),
+            Device('Sensor de Presença 02 (Cozinha)', DeviceType.SENSOR_PRESENCE),
+            Device('Sensor Abertura 01 (Porta Cozinha)', DeviceType.SENSOR_OPENNING),
+            Device('Sensor Abertura 02 (Janela Cozinha)', DeviceType.SENSOR_OPENNING),
+            Device('Sensor Abertura 03 (Porta Sala)', DeviceType.SENSOR_OPENNING),
+            Device('Sensor Abertura 04 (Janela Sala)', DeviceType.SENSOR_OPENNING),
+            Device('Sensor Abertura 05 (Janela Quarto 01)', DeviceType.SENSOR_OPENNING),
+            Device('Sensor Abertura 06 (Janela Quarto 02)', DeviceType.SENSOR_OPENNING),
+        ]
 
-    try:
-        await tasks
-    except asyncio.CancelledError:
-        ...
-    finally:
-        writer.close()
-        await writer.wait_closed()
+    async def connection_handler(self, reader, writer):
+        host, port, *_ = writer.get_extra_info('peername')
 
-        logging.info("Closed connection to %s:%s", host, port)
+        # Exclusive connection for pushing commands
+        #   maybe could be the same server connection, but this is more resistant
+        #   to protocol changes
+        _, push_writer = await asyncio.open_connection(host, PORT_DISTRIBUTED)
 
+        states_queue = asyncio.Queue(self.max_queue_size)
+        gui_commands_queue = asyncio.Queue(self.max_queue_size)
 
-async def main():
-    server = await asyncio.start_server(connection_handler, HOST_CENTRAL, PORT_CENTRAL)
+        gui = Gui(self.devices, states_queue, gui_commands_queue)
 
-    host, port, *_ = server.sockets[0].getsockname()
-    logging.info('Waiting for connections on %s:%s ...', host, port)
+        tasks = asyncio.gather(
+            gui.start(),
+            self.commands_handler(push_writer, gui_commands_queue),
+            self.states_handler(writer, reader, states_queue),
+        )
 
-    async with server:
-        await server.serve_forever()
+        try:
+            await tasks
+        except asyncio.CancelledError:
+            tasks.cancel()
+            gui.stop()
+
+        try:
+            await tasks
+        except asyncio.CancelledError:
+            ...
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+            self.logger.info("Closed connection to %s:%s", host, port)
+
+    async def start(self):
+        server = await asyncio.start_server(
+            self.connection_handler,
+            self.host, self.port
+        )
+
+        host, port, *_ = server.sockets[0].getsockname()
+        self.logger.info('Waiting for connections on %s:%s ...', host, port)
+
+        async with server:
+            await server.serve_forever()
 
 
 if __name__ == '__main__':
-    logging.getLogger().setLevel(logging.DEBUG)
+    server = Server()
 
     try:
-        asyncio.run(main())
+        asyncio.run(server.start())
     except KeyboardInterrupt:
         logging.info("Server interrupted. Finishing...")
     finally:
