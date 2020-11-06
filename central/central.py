@@ -8,6 +8,9 @@ import struct
 from functools import partial
 from enum import Enum
 from typing import NamedTuple
+from collections import defaultdict
+
+from gui import Gui
 
 
 HOST_CENTRAL = ''
@@ -15,25 +18,39 @@ PORT_CENTRAL = 10008
 
 PORT_DISTRIBUTED = 10108
 
-CommandType = Enum('CommandType', 'ON OFF AUTO')
+CommandType = Enum('CommandType', 'ON_OFF AUTO')
 DeviceType = Enum('DeviceType', 'SENSOR_OPENNING SENSOR_PRESENCE LAMP AIR_CONDITIONING')
 
 ALARM_TYPES = (DeviceType.SENSOR_OPENNING, DeviceType.SENSOR_PRESENCE)
+AUTO_DEVICE_NAME = 'Temperatura Automática'
 
 
-class Command(NamedTuple):
-    type_ : CommandType
-    device_type : DeviceType
-    device_id : int  # until 63
-    value: float = -1  # Auxiliar for AUTO
-    
+class Device:
+    # Idenfified by (device type, device id)
+    id_counters = defaultdict(int)
+
+    def __init__(self, name, type_):
+        type_ = DeviceType(type_)
+
+        self.name = name
+        self.type = type_
+
+        self.id = Device.id_counters[self.type]
+        Device.id_counters[self.type] += 1
+
 
 async def play_alarm():
-    print("ALARM!!!!")
+    ...
+    # print("ALARM!!!!")
+
+
+def update_state(a, b):
+    ...
 
 
 async def states_handler(reader):
     while True:
+        # TODO: Add temperature and umidity
         states_struct = struct.Struct('<BQ')
 
         payload = await reader.readexactly(states_struct.size)
@@ -44,30 +61,74 @@ async def states_handler(reader):
         if device_type in ALARM_TYPES:
             await play_alarm()
 
-        print(f'TIPO DE DISPOSITIVO: {device_type} <-> ESTADO RECEBIDO: {states:064b}')
+        update_state(device_type, states)
+
+def devices_to_commands(devices):
+    'Returns one command by type'
+    states = {d.type: 0 for d in devices}
+
+    for device in devices:
+        if device.name == AUTO_DEVICE_NAME:
+            continue
+
+        states[device.type] |= 1 << device.id
+
+    commands = [
+        struct.pack('<BBB', CommandType.ON_OFF.value, t.value, s)
+        for t, s in states.items()
+    ]
+
+    # TODO: Add AUTO commands
+    # commands += []
+
+    return commands
 
 
-async def commands_handler(writer, queue):
+async def get_user_commands(devices_dict, gui_commands_queue):
+    gui_command = await gui_commands_queue.get()
+
+    devices = [devices_dict[id_] for id_ in gui_command]
+    commands = devices_to_commands(devices)
+
+    return commands
+
+
+async def commands_handler(writer, devices_dict, queue):
     while True:
-        command = await queue.get()
+        commands = await get_user_commands(devices_dict, queue)
 
-        assert command.device_id <= 63, 'Invalid Device ID'
-
-        command_args = list(command)
-        command_args[0] = command.type_.value
-        command_args[1] = command.device_type.value
-
-        if command.type_ == CommandType.AUTO:
-            command_bytes = struct.pack('<BBBf', *command_args)
-        else:
-            command_bytes = struct.pack('<BBB', *command_args[:-1])
-
-        writer.write(command_bytes)
-        print('COMANDO ENVIADO')
-        await writer.drain()
+        for command in commands:
+            writer.write(command)
+            await writer.drain()
 
 
-async def connection_handler(reader, writer, commands_queue):
+def get_registered_devices():
+    # For now, static
+    return [
+        # Manually activables
+        Device('Lâmpada 01 (Cozinha)', DeviceType.LAMP),
+        Device('Lâmpada 02 (Sala)', DeviceType.LAMP),
+        Device('Lâmpada 03 (Quarto 01)', DeviceType.LAMP),
+        Device('Lâmpada 04 (Quarto 02)', DeviceType.LAMP),
+        Device('Ar-Condicionado 01 (Quarto 01)', DeviceType.AIR_CONDITIONING),
+        Device('Ar-Condicionado 02 (Quarto 02)', DeviceType.AIR_CONDITIONING),
+        Device(AUTO_DEVICE_NAME, DeviceType.AIR_CONDITIONING),
+
+        # Passives #TODO: Differentiate on interface
+        Device('Sensor de Presença 01 (Sala)', DeviceType.SENSOR_PRESENCE),
+        Device('Sensor de Presença 02 (Cozinha)', DeviceType.SENSOR_PRESENCE),
+        Device('Sensor Abertura 01 (Porta Cozinha)', DeviceType.SENSOR_OPENNING),
+        Device('Sensor Abertura 02 (Janela Cozinha)', DeviceType.SENSOR_OPENNING),
+        Device('Sensor Abertura 03 (Porta Sala)', DeviceType.SENSOR_OPENNING),
+        Device('Sensor Abertura 04 (Janela Sala)', DeviceType.SENSOR_OPENNING),
+        Device('Sensor Abertura 05 (Janela Quarto 01)', DeviceType.SENSOR_OPENNING),
+        Device('Sensor Abertura 06 (Janela Quarto 02)', DeviceType.SENSOR_OPENNING),
+    ]
+
+def devices_to_gui(devices):
+    return [[(d.type, d.id), d.name] for d in devices]
+
+async def connection_handler(reader, writer):
     host, port, *_ = writer.get_extra_info('peername')
 
     # Exclusive connection for pushing commands
@@ -75,10 +136,18 @@ async def connection_handler(reader, writer, commands_queue):
     #   to protocol changes
     _, push_writer = await asyncio.open_connection(host, PORT_DISTRIBUTED)
 
-    tasks = asyncio.gather(
-        get_user_command(commands_queue),
-        commands_handler(push_writer, commands_queue),
+    max_queue_size = 10
+    states_queue = asyncio.Queue(max_queue_size)
+    gui_commands_queue = asyncio.Queue(max_queue_size)
 
+    devices = get_registered_devices()
+    devices_dict = {(d.type, d.id): d for d in devices}
+
+    gui = Gui(devices_to_gui(devices), states_queue, gui_commands_queue)
+
+    tasks = asyncio.gather(
+        gui.start(),
+        commands_handler(push_writer, devices_dict, gui_commands_queue),
         states_handler(reader),
     )
 
@@ -98,29 +167,8 @@ async def connection_handler(reader, writer, commands_queue):
         logging.info("Closed connection to %s:%s", host, port)
 
 
-async def get_user_command(commands_queue):
-    while True:
-        await asyncio.sleep(random.randint(1, 5))
-
-        type_ = CommandType(random.randint(1, len(CommandType)))
-        device_type = DeviceType(random.randint(1, len(DeviceType)))
-        device_id = random.randint(1, 63)
-
-        value = -1
-        if type_ == CommandType.AUTO:
-            value = random.randint(0, 50)
-            device_type = DeviceType.AIR_CONDITIONING  # The only available
-
-        command = Command(type_, device_type, device_id, value)
-        await commands_queue.put(command)
-
-
 async def main():
-    max_queue_size = 10
-    commands_queue = asyncio.Queue(max_queue_size)
-    command_callback = partial(connection_handler, commands_queue=commands_queue)
-
-    server = await asyncio.start_server(command_callback, HOST_CENTRAL, PORT_CENTRAL)
+    server = await asyncio.start_server(connection_handler, HOST_CENTRAL, PORT_CENTRAL)
 
     host, port, *_ = server.sockets[0].getsockname()
     logging.info('Waiting for connections on %s:%s ...', host, port)
