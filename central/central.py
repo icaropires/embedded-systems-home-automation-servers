@@ -14,10 +14,9 @@ from constants import (
     HOST_CENTRAL,
     PORT_CENTRAL,
     PORT_DISTRIBUTED,
-    CommandType,
     DeviceType,
     ALARM_TYPES,
-    AUTO_DEVICE_NAME,
+    AUTO_TYPES,
 )
 
 
@@ -84,18 +83,19 @@ class Server:
 
             update_state(device_type, states)
 
-    def devices_to_commands(self, devices):
+    def devices_to_commands(self, selected_devices):
         'Returns one command by type'
-        states = {d.type: 0 for d in devices}
+        # states = {d.type: 0 for d in self.devices}
+        states = {d.type: 0 for d in self.devices if d.type not in AUTO_TYPES}
 
-        for device in devices:
-            if device.name == AUTO_DEVICE_NAME:
+        for device in selected_devices:
+            if device.type in AUTO_TYPES:
                 continue
 
             states[device.type] |= 1 << device.id
 
         commands = [
-            struct.pack('<BBB', CommandType.ON_OR_OFF.value, t.value, s)
+            struct.pack('<BQ', t.value, s)
             for t, s in states.items()
         ]
 
@@ -137,7 +137,7 @@ class Server:
             Device('Lâmpada 04 (Quarto 02)', DeviceType.LAMP),
             Device('Ar-Condicionado 01 (Quarto 01)', DeviceType.AIR_CONDITIONING),
             Device('Ar-Condicionado 02 (Quarto 02)', DeviceType.AIR_CONDITIONING),
-            Device(AUTO_DEVICE_NAME, DeviceType.AIR_CONDITIONING),
+            Device('Temperatura automática', DeviceType.AIR_CONDITIONING_AUTO),
 
             # Passives #TODO: Differentiate on interface
             Device('Sensor de Presença 01 (Sala)', DeviceType.SENSOR_PRESENCE),
@@ -157,6 +157,8 @@ class Server:
         #   maybe could be the same server connection, but this is more resistant
         #   to protocol changes
         _, push_writer = await asyncio.open_connection(host, PORT_DISTRIBUTED)
+
+        self.logger.info("Connected to %s:%s", host, port)
 
         states_queue = asyncio.Queue(self.max_queue_size)
         gui_commands_queue = asyncio.Queue(self.max_queue_size)

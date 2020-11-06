@@ -13,8 +13,13 @@ PORT_CENTRAL = 10008
 
 PORT_DISTRIBUTED = 10108
 
-CommandType = Enum('CommandType', 'ON_OR_OFF AUTO')
-DeviceType = Enum('DeviceType', 'SENSOR_OPENNING SENSOR_PRESENCE LAMP AIR_CONDITIONING')
+DeviceType = Enum(
+    'DeviceType',
+    'SENSOR_OPENNING SENSOR_PRESENCE LAMP AIR_CONDITIONING AIR_CONDITIONING_AUTO'
+)
+
+# Types which have automatic control
+AUTO_TYPES = (DeviceType.AIR_CONDITIONING_AUTO,)
 
 
 def states_handler():
@@ -34,20 +39,20 @@ def states_handler():
 
 def commands_handler(conn):
     while True:
-        command = conn.recv(3)
+        command = conn.recv(1)
 
-        type_, device_type, device_id = struct.unpack('<BBB', command)
-
-        type_ = CommandType(type_)
+        device_type, *_ = struct.unpack('<B', command)
         device_type = DeviceType(device_type)
 
-        value = -1
-        if type_ == CommandType.AUTO:
-            value = conn.recv(4)
-            value, *_ = struct.unpack('f', value)
-
-        print(f'comando = {type_!s}, device = {device_type}, device_id = {device_id}, temperatura = {value}')
-
+        if device_type not in AUTO_TYPES:
+            command = conn.recv(8)
+            states, *_ = struct.unpack('<Q', command)
+            print(f'device_type = {device_type}\nstates = {states:064b}\n')
+        else:
+            # command = conn.recv(4)
+            # value = struct.unpack('<f', command)
+            value = -1
+            print(f'device_type = {device_type}\ntemperatura = {value}\n')
 
 def main():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

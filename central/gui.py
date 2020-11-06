@@ -11,6 +11,7 @@ from prompt_toolkit.widgets import Checkbox, Frame, CheckboxList, Label
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit import print_formatted_text as print
 from prompt_toolkit.shortcuts import yes_no_dialog
+from constants import PASSIVE_TYPES
 
 
 class Gui:
@@ -22,23 +23,31 @@ class Gui:
         self.states_queue = states_queue
         self.commands_queue = commands_queue
 
-        self._devices = self.gen_devices_dict(devices)
-        devices_list = [[id_, d.name] for id_, d in self._devices.items()]
-
-        self._temperature_umidity = FormattedTextControl('')
         self._status = FormattedTextControl('')
-        self._devices_states = self.CheckboxListNoScroll(devices_list)
+        self._temperature_umidity = FormattedTextControl('')
+
+        self._devices = self.gen_devices_dict(devices)
+
+        self._passive_devices_dict = {
+            id_: Window(FormattedTextControl(d.name))
+            for id_, d in self._devices.items()
+        }
+
+        active, passive = self.get_devices_containers()
+
+        self._active_devices_states = active
+        self._passive_devices_states = passive
 
         self._is_running = True
-        self.bindings = KeyBindings()
+        self._bindings = KeyBindings()
 
-        @self.bindings.add('q')
+        @self._bindings.add('q')
         def _(event):
             self.stop()
 
-        @self.bindings.add('c-p')
+        @self._bindings.add('c-p')
         def submit_command(_):
-            selected_values = self._devices_states.current_values
+            selected_values = self._active_devices_states.current_values
             selected_values = [self._devices[id_] for id_ in selected_values]
 
             asyncio.gather(
@@ -50,7 +59,23 @@ class Gui:
         self._is_running = False
         asyncio.create_task(self.commands_queue.put(None))
 
-        get_app().exit()
+        app = get_app()
+        if app.is_running:
+            app.exit()
+
+    def get_devices_containers(self):
+        active_devices_list = [
+            [id_, d.name] for id_, d in self._devices.items()
+            if d.type not in PASSIVE_TYPES
+        ]
+        active_devices = self.CheckboxListNoScroll(active_devices_list)
+
+        passive_devices = [
+            self._passive_devices_dict[id_] for id_, d in self._devices.items()
+            if d.type in PASSIVE_TYPES
+        ]
+         
+        return active_devices, passive_devices
 
     @staticmethod
     def gen_devices_dict(devices):
@@ -69,10 +94,15 @@ class Gui:
         )
 
     def update_devices_states(self):
-        for i, (id_, _) in enumerate(self._devices_states.values):
+        for idx, (id_, _) in enumerate(self._active_devices_states.values):
             name = self._devices[id_].name
             color = random.choice(('red', 'green'))
-            self._devices_states.values[i][1] = HTML(f'<{color}>{name}</{color}>')
+            self._active_devices_states.values[idx][1] = HTML(f'<{color}>{name}</{color}>')
+
+        for id_ in self._passive_devices_dict:
+            name = self._devices[id_].name
+            color = random.choice(('red', 'green'))
+            self._passive_devices_dict[id_].content.text = HTML(f'<{color}>{name}</{color}>')
 
     async def update_states(self):
         while self._is_running:
@@ -90,13 +120,17 @@ class Gui:
         devices_states = VSplit(
             [
                 HSplit([
-                    Label(HTML("\n<b>Choose the actives:</b>"), width=20),
-                    VSplit([self._devices_states]),
+                    Label(HTML("\n<b>Change states:</b>"), width=20),
+                    HSplit([self._active_devices_states,]),
+
+                    Label(HTML("\n<b>Passive devices:</b>"), width=20),
+                    HSplit(self._passive_devices_states),
+
                     Label(
                         HTML(
                             "<b>Device Colors</b>\n"
-                            "    <i><green>Green:</green></i> active\n"
-                            "    <i><red>Red:</red></i> inactive"
+                            "    <i><green>Green:</green></i> turned on / detection\n"
+                            "    <i><red>Red:</red></i> turned off / not detecting"
                         )
                     ),
                     
@@ -106,7 +140,7 @@ class Gui:
             padding_char=' ', padding=3
         )
 
-        root_container = VSplit([Frame(  # I know, not pretty
+        root_container = VSplit([Frame(
             title="Control Dashboard",
             body=HSplit([
                 devices_states,
@@ -119,7 +153,7 @@ class Gui:
         # Define application.
         application = Application(
             layout=layout,
-            key_bindings=self.bindings,
+            key_bindings=self._bindings,
             refresh_interval=1,
             full_screen=True
         )
