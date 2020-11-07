@@ -6,7 +6,6 @@
 #include <csignal>
 #include <stdexcept>
 #include <vector>
-#include <map>
 #include <algorithm>    // std::find
 
 #include <stdio.h> 
@@ -17,26 +16,10 @@
 #include <sys/types.h>
 #include <endian.h>
 
+#include "constants.h"
+#include "device.h"
+#include "device_gpio.h"
 
-#define HOST_CENTRAL "127.0.0.1"
-#define PORT_CENTRAL 10008
-
-#define PORT_DISTRIBUTED 10108
-
-#define STATES_MSG_LEN 17  // bytes
-#define STATES_LEN 64  // bits
-
-enum class DeviceType {SENSOR_OPENNING = 1, SENSOR_PRESENCE, LAMP, AIR_CONDITIONING, AIR_CONDITIONING_AUTO};
-
-const std::map<DeviceType, std::string> DEVICE_TYPE_NAME {
-    {DeviceType::SENSOR_OPENNING, "SENSOR_OPENNING"},
-    {DeviceType::SENSOR_PRESENCE, "SENSOR_PRESENCE"},
-    {DeviceType::LAMP, "LAMP"},
-    {DeviceType::AIR_CONDITIONING, "AIR_CONDITIONING"},
-    {DeviceType::AIR_CONDITIONING_AUTO, "AIR_CONDITIONING_AUTO"},
-};
-
-const std::vector<DeviceType> AUTO_TYPES{DeviceType::AIR_CONDITIONING_AUTO,};
 
 class Server {
     typedef struct {
@@ -65,18 +48,24 @@ class Server {
     std::atomic<bool> continue_running, is_server_up;
     int server_socket = -1, client_socket = -1;
 
+    // Index to make searches happen the same as in central server
+    std::map<std::pair<DeviceType, int>, std::vector<Device>::const_iterator> idx_to_device;
+
  public:
 
     Server()
         : continue_running(true), is_server_up(false) {
-
     }
 
     ~Server() {
         stop();
     }
 
-    void start() {
+    void start(const std::vector<Device>& devices) {
+        for(auto it = devices.begin(); it < devices.end(); ++it) {
+            idx_to_device[{it->type, it->id}] = it;
+        }
+
         std::thread t_server(&Server::server_loop, this);
         std::thread t_client(&Server::client_loop, this);
 
@@ -154,6 +143,33 @@ class Server {
         }
     }
 
+    void apply_states(DeviceType device_type, const std::bitset<STATES_LEN>& new_states) {
+        for(int i = 0; i <= STATES_LEN; i++) {
+            bool is_on = (bool) new_states[i];  // Bitset iterates from left to right
+
+            auto idx = std::make_pair(device_type, i);
+
+            if(idx_to_device.count(idx)) {
+                auto *p_device = (const Device *) &(*idx_to_device[idx]);
+
+                if(p_device->passive) {
+                    continue;
+                }
+
+                // Could add more types and checkings
+                auto *gpio = (const DeviceGpio *) p_device;
+
+                if (is_on) {
+                    gpio->turn_on();
+                } else {
+                    gpio->turn_off();
+                }
+            } else {
+                // Not registered device
+            }
+        }
+    }
+
     void connection_handler(int socket) {
         while(continue_running) {
             uint8_t device_type_int = -1;
@@ -174,6 +190,8 @@ class Server {
 
                     std::cout << "Received states to " + DEVICE_TYPE_NAME.at(device_type) + ":" << std::endl;
                     std::cout << new_states.to_string() << std::endl << std::endl;
+
+                    apply_states(device_type, new_states);
                 } else {
                     perror("Error receiving states");
                     continue;
@@ -239,7 +257,7 @@ Server server;
 
 void exit_handler(int) {
     server.stop();
-    std::cout << "Exitting.." << std::endl;
+    std::cout << "Exitting..." << std::endl;
 
     sleep(1);  // Let stuff finish
     kill(getpid(), SIGUSR1);  // Not ideal, but interrupt accept
@@ -249,7 +267,27 @@ int main() {
     signal(SIGINT, exit_handler);
     signal(SIGTERM, exit_handler);
 
-    server.start();
+   // MUST be same order registered in central server!
+    std::vector<Device> devices {
+        DeviceGpio("Lâmpada 01 (Cozinha)", DeviceType::LAMP, false, 17),
+        DeviceGpio("Lâmpada 02 (Sala)", DeviceType::LAMP, false, 18),
+        DeviceGpio("Lâmpada 03 (Quarto 01)", DeviceType::LAMP, false, 27),
+        DeviceGpio("Lâmpada 04 (Quarto 02)", DeviceType::LAMP, false, 22),
+        DeviceGpio("Ar-Condicionado 01 (Quarto 01)", DeviceType::AIR_CONDITIONING, false, 23),
+        DeviceGpio("Ar-Condicionado 02 (Quarto 02)", DeviceType::AIR_CONDITIONING, false, 24),
+        // Device("Temperatura automática", DeviceType::AIR_CONDITIONING_AUTO),
+
+        DeviceGpio("Sensor de Presença 01 (Sala)", DeviceType::SENSOR_PRESENCE, true, 25),
+        DeviceGpio("Sensor de Presença 02 (Cozinha)", DeviceType::SENSOR_PRESENCE, true, 26),
+        DeviceGpio("Sensor Abertura 01 (Porta Cozinha)", DeviceType::SENSOR_OPENNING, true, 5),
+        DeviceGpio("Sensor Abertura 02 (Janela Cozinha)", DeviceType::SENSOR_OPENNING, true, 6),
+        DeviceGpio("Sensor Abertura 03 (Porta Sala)", DeviceType::SENSOR_OPENNING, true, 12),
+        DeviceGpio("Sensor Abertura 04 (Janela Sala)", DeviceType::SENSOR_OPENNING, true, 16),
+        DeviceGpio("Sensor Abertura 05 (Janela Quarto 01)", DeviceType::SENSOR_OPENNING, true, 20),
+        DeviceGpio("Sensor Abertura 06 (Janela Quarto 02)", DeviceType::SENSOR_OPENNING, true, 21),
+    };
+
+    server.start(devices);
 
     return 0; 
 }

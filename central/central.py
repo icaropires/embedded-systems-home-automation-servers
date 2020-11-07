@@ -84,8 +84,8 @@ class Server:
 
     def devices_to_commands(self, selected_devices):
         'Returns one command by type'
-        # states = {d.type: 0 for d in self.devices}
-        states = {d.type: 0 for d in self.devices if d.type not in AUTO_TYPES}
+        # states = {d.type: 0 for d in selected_devices}
+        states = {d.type: 0 for d in selected_devices if d.type not in AUTO_TYPES}
 
         for device in selected_devices:
             if device.type in AUTO_TYPES:

@@ -47,7 +47,10 @@ class Gui:
         @self._bindings.add('c-p')
         def _(_):
             selected_values = self._active_devices_states.current_values
-            selected_values = [self._devices[id_] for id_ in selected_values]
+            selected_values = [
+                self._devices[id_] for id_ in selected_values
+                if not self._devices[id_].passive
+            ]
 
             asyncio.gather(
                 self.commands_queue.put(selected_values),
