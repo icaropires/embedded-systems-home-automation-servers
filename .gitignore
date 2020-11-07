@@ -5,6 +5,10 @@ env
 venv
 .venv
 
+bin
+obj
+errors.log
+
 # Prerequisites
 *.d
 

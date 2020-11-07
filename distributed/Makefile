@@ -6,7 +6,7 @@ CFLAGS += -I $(INC_DIR) -I $(BME280_LIB) -I $(BCM2835_LIB)
 
 CXXFLAGS = $(CFLAGS) -std=c++14
 
-LDFLAGS = -lwiringPi -lbcm2835 -lpthread
+LDFLAGS = -lpthread -lwiringPi -lbcm2835
 BUILD_DIR = .
 
 INC_DIR = $(BUILD_DIR)/include
@@ -32,7 +32,7 @@ $(BIN): $(OBJS)
 	@mkdir -p $(@D)
 	$(CXX) $(OBJ_DIR)/*.o -o $@ $(LDFLAGS) 
 
-$(OBJ_DIR)/%.o : $(SRC_DIR)/%.cc $(OBJ_DIR)/bme280.o $(OBJ_DIR)/display.o
+$(OBJ_DIR)/%.o : $(SRC_DIR)/%.cc $(OBJ_DIR)/bme280.o
 	@mkdir -p $(@D)
 	$(CXX) $(CXXFLAGS) $< -o $@
 

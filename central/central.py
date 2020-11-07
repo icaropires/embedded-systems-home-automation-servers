@@ -62,7 +62,7 @@ class Server:
             return [s == '1' for s in f'{states:064b}']
 
         while True:
-            states_struct = struct.Struct('<BQff')
+            states_struct = struct.Struct('>BQff')
 
             try:
                 payload = await reader.readexactly(states_struct.size)
@@ -97,7 +97,7 @@ class Server:
             states[device.type] |= 1 << device.id
 
         commands = [
-            struct.pack('<BQ', t.value, s)
+            struct.pack('>BQ', t.value, s)
             for t, s in states.items()
         ]
 

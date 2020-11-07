@@ -40,7 +40,7 @@ def states_handler():
                 temperature = float(random.randint(-20, 50))
                 umidity = float(random.randint(0, 100))
 
-                states = struct.pack('<BQff', device_type, devices_states, temperature, umidity)
+                states = struct.pack('>BQff', device_type, devices_states, temperature, umidity)
                 s.send(states)
 
                 device_type = DeviceType(device_type)
@@ -52,16 +52,16 @@ def commands_handler(conn):
     while True:
         command = conn.recv(1)
 
-        device_type, *_ = struct.unpack('<B', command)
+        device_type, *_ = struct.unpack('B', command)
         device_type = DeviceType(device_type)
 
         if device_type not in AUTO_TYPES:
             command = conn.recv(8)
-            states, *_ = struct.unpack('<Q', command)
+            states, *_ = struct.unpack('>Q', command)
             print(f'device_type = {device_type}\nstates = {states:064b}\n')
         else:
             # command = conn.recv(4)
-            # value = struct.unpack('<f', command)
+            # value = struct.unpack('>f', command)
             value = -1
             print(f'device_type = {device_type}\ntemperatura = {value}\n')
 
