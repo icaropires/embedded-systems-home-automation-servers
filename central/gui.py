@@ -139,25 +139,32 @@ class Gui:
                     Label(HTML("\n<b>Passive devices:</b>"), width=20),
                     HSplit(self._passive_devices_states),
 
-                    Label(
-                        HTML(
-                            "<b>Device Colors</b>\n"
-                            "    <i><green>Green:</green></i> turned on / detection\n"
-                            "    <i><red>Red:</red></i> turned off / not detecting"
-                        )
-                    ),
+                    Label(HTML(
+                        "<b>Device Colors:</b>\n\n"
+                        "<i><green>Green:</green></i> turned on / detecting\n"
+                        "<i><red>Red:</red></i> turned off / not detecting"
+                    )),
                     
                 ], padding=1),
-                Window(self._temperature_umidity, width=30),
+                HSplit([
+                    Window(self._temperature_umidity, width=30, height=9),
+                    Label(HTML(
+                        "<b>Commands:</b>\n\n"
+                        '<i>ctrl+p:</i> Print state to system\n'
+                        "<i>up/down:</i> Navigate\n"
+                        "<i>space/enter:</i> Check boxes\n"
+                        "<i>q:</i> Quit\n"
+                    )),
+                ], padding=1, padding_char=' ')
             ],
-            padding_char=' ', padding=3
+            padding_char=' ', padding=2
         )
 
         root_container = VSplit([Frame(
             title="Control Dashboard",
             body=HSplit([
                 devices_states,
-                Window(self._status, height=1, width=50, style='bg:#222222')
+                Window(self._status, height=1, width=50, style='bg:#333333')
             ], padding=1)
         )], width=20, align="LEFT")
 
