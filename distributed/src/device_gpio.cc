@@ -7,9 +7,9 @@ DeviceGpio::DeviceGpio(const std::string& name, DeviceType device_type, bool pas
 }
 
 void DeviceGpio::turn_on() const {
-    std::cout << "Turned on " << name << ' ' << std::endl;
+    std::cout << "Turned on " << name << std::endl;
 }
 
 void DeviceGpio::turn_off() const {
-    std::cout << "Turned off " << name << ' ' << id << std::endl;
+    std::cout << "Turned off " << name << std::endl;
 }
