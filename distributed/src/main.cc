@@ -21,14 +21,14 @@ int main() {
     signal(SIGTERM, exit_handler);
 
    // MUST be same order registered in central server!
-    std::vector<Device> devices {
+    std::vector<DeviceGpio> devices {
         DeviceGpio("Lâmpada 01 (Cozinha)", DeviceType::LAMP, false, 17),
         DeviceGpio("Lâmpada 02 (Sala)", DeviceType::LAMP, false, 18),
         DeviceGpio("Lâmpada 03 (Quarto 01)", DeviceType::LAMP, false, 27),
         DeviceGpio("Lâmpada 04 (Quarto 02)", DeviceType::LAMP, false, 22),
         DeviceGpio("Ar-Condicionado 01 (Quarto 01)", DeviceType::AIR_CONDITIONING, false, 23),
         DeviceGpio("Ar-Condicionado 02 (Quarto 02)", DeviceType::AIR_CONDITIONING, false, 24),
-        Device("Temperatura automática", DeviceType::AIR_CONDITIONING_AUTO, false),
+        // Device("Temperatura automática", DeviceType::AIR_CONDITIONING_AUTO, false),  // TODO: this is not Gpio
 
         DeviceGpio("Sensor de Presença 01 (Sala)", DeviceType::SENSOR_PRESENCE, true, 25),
         DeviceGpio("Sensor de Presença 02 (Cozinha)", DeviceType::SENSOR_PRESENCE, true, 26),

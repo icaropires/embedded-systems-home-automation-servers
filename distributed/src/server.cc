@@ -8,7 +8,7 @@ Server::~Server() {
     stop();
 }
 
-void Server::start(const std::vector<Device>& devices) {
+void Server::start(const std::vector<DeviceGpio>& devices) {
     for(auto it = devices.begin(); it < devices.end(); ++it) {
         idx_to_device[{it->type, it->id}] = it;
     }
@@ -95,19 +95,20 @@ void Server::apply_states(DeviceType device_type, const std::bitset<STATES_LEN>&
         auto idx = std::make_pair(device_type, i);
 
         if(idx_to_device.count(idx)) {
-            auto *p_device = (const Device *) &(*idx_to_device[idx]);
+            // auto *p_device = (const Device *) &(*idx_to_device[idx]);
+            auto p_device = idx_to_device[idx];
 
             if(p_device->passive) {
                 continue;
             }
 
             // Could add more types and checkings
-            auto *gpio = (const DeviceGpio *) p_device;
+            // auto *gpio = (const DeviceGpio *) p_device;
 
             if (is_on) {
-                gpio->turn_on();
+                p_device->turn_on();
             } else {
-                gpio->turn_off();
+                p_device->turn_off();
             }
         } else {
             // Not registered device

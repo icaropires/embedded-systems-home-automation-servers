@@ -49,7 +49,7 @@ class Server {
     int server_socket = -1, client_socket = -1;
 
     // Index to make searches happen the same as in central server
-    std::map<std::pair<DeviceType, int>, std::vector<Device>::const_iterator> idx_to_device;
+    std::map<std::pair<DeviceType, int>, std::vector<DeviceGpio>::const_iterator> idx_to_device;
 
  public:
 
@@ -57,7 +57,7 @@ class Server {
 
     ~Server();
 
-    void start(const std::vector<Device>& devices);
+    void start(const std::vector<DeviceGpio>& devices);
 
     void stop();
 
