@@ -39,10 +39,6 @@ async def play_alarm():
     # print("ALARM!!!!")
 
 
-def update_state(a, b):
-    ...
-
-
 class Server:
     def __init__(self, host=HOST_CENTRAL, port=PORT_CENTRAL):
         self.host = host
@@ -141,7 +137,7 @@ class Server:
             Device('Ar-Condicionado 02 (Quarto 02)', DeviceType.AIR_CONDITIONING),
             Device('Temperatura automática', DeviceType.AIR_CONDITIONING_AUTO),
 
-            # Passives #TODO: Differentiate on interface
+            # Passives
             Device('Sensor de Presença 01 (Sala)', DeviceType.SENSOR_PRESENCE),
             Device('Sensor de Presença 02 (Cozinha)', DeviceType.SENSOR_PRESENCE),
             Device('Sensor Abertura 01 (Porta Cozinha)', DeviceType.SENSOR_OPENNING),
