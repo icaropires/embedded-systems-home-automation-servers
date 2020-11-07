@@ -5,6 +5,9 @@
 #include <atomic>
 #include <csignal>
 #include <stdexcept>
+#include <vector>
+#include <map>
+#include <algorithm>    // std::find
 
 #include <stdio.h> 
 #include <sys/socket.h> 
@@ -25,10 +28,20 @@
 
 enum class DeviceType {SENSOR_OPENNING = 1, SENSOR_PRESENCE, LAMP, AIR_CONDITIONING, AIR_CONDITIONING_AUTO};
 
+const std::map<DeviceType, std::string> DEVICE_TYPE_NAME {
+    {DeviceType::SENSOR_OPENNING, "SENSOR_OPENNING"},
+    {DeviceType::SENSOR_PRESENCE, "SENSOR_PRESENCE"},
+    {DeviceType::LAMP, "LAMP"},
+    {DeviceType::AIR_CONDITIONING, "AIR_CONDITIONING"},
+    {DeviceType::AIR_CONDITIONING_AUTO, "AIR_CONDITIONING_AUTO"},
+};
+
+const std::vector<DeviceType> AUTO_TYPES{DeviceType::AIR_CONDITIONING_AUTO,};
+
 class Server {
     typedef struct {
         uint8_t device_type;
-        unsigned long long states;
+        uint64_t states;
         float temperature;
         float umidity;
     } StatesMsg;
@@ -141,6 +154,36 @@ class Server {
         }
     }
 
+    void connection_handler(int socket) {
+        while(continue_running) {
+            uint8_t device_type_int = -1;
+
+            if((recv(socket, (void *) &device_type_int, 1, 0)) < 0) {
+                perror("Error receiving command");
+                continue;
+            }
+
+            auto device_type = static_cast<DeviceType>(device_type_int);
+
+            if(find(AUTO_TYPES.begin(), AUTO_TYPES.end(), device_type) == AUTO_TYPES.end()) {
+                uint64_t states_int = -1;
+
+                if((recv(socket, (void *) &states_int, 8, 0)) > 0) {
+                    states_int = htobe64(states_int);
+                    std::bitset<STATES_LEN> new_states(states_int);
+
+                    std::cout << "Received states to " + DEVICE_TYPE_NAME.at(device_type) + ":" << std::endl;
+                    std::cout << new_states.to_string() << std::endl << std::endl;
+                } else {
+                    perror("Error receiving states");
+                    continue;
+                }
+            } else {
+                std::cout << "Auto command received: " << std::endl;
+            }
+        }
+    }
+
     void server_loop() {
         struct sockaddr_in distributed_addr; 
         distributed_addr.sin_family = AF_INET; 
@@ -178,8 +221,16 @@ class Server {
                 perror("Unable to accept connection") ;
                 continue;
             }
-            // TODO
+
+            std::string client_addr_str(inet_ntoa(server_client_addr.sin_addr));
+            client_addr_str += ":" + std::to_string(ntohs(server_client_addr.sin_port));
+
+            std::cout << "Connected to " << client_addr_str << std::endl;
+
+            connection_handler(socket_server_client);
+
             close(socket_server_client);
+            std::cout << "Closed connecttion to " << client_addr_str << std::endl;
         }
     }
 };
