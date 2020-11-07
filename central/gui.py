@@ -46,7 +46,7 @@ class Gui:
             self.stop()
 
         @self._bindings.add('c-p')
-        def submit_command(_):
+        def _(_):
             selected_values = self._active_devices_states.current_values
             selected_values = [self._devices[id_] for id_ in selected_values]
 
@@ -69,6 +69,7 @@ class Gui:
             if d.type not in PASSIVE_TYPES
         ]
         active_devices = self.CheckboxListNoScroll(active_devices_list)
+        # import pdb; pdb.set_trace()
 
         passive_devices = [
             self._passive_devices_dict[id_] for id_, d in self._devices.items()
@@ -147,7 +148,7 @@ class Gui:
                     
                 ], padding=1),
                 HSplit([
-                    Window(self._temperature_umidity, width=30, height=9),
+                    Window(self._temperature_umidity, width=30),
                     Label(HTML(
                         "<b>Commands:</b>\n\n"
                         '<i>ctrl+p:</i> Print state to system\n'
@@ -157,7 +158,7 @@ class Gui:
                     )),
                 ], padding=1, padding_char=' ')
             ],
-            padding_char=' ', padding=2
+            padding_char=' ', padding=2, height=len(self._devices) + 10
         )
 
         root_container = VSplit([Frame(
@@ -166,7 +167,7 @@ class Gui:
                 devices_states,
                 Window(self._status, height=1, width=50, style='bg:#333333')
             ], padding=1)
-        )], width=20, align="LEFT")
+        )], width=20)
 
         layout = Layout(root_container)
 
