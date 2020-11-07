@@ -14,8 +14,5 @@ DeviceType = Enum(
 # Device types that will trigger alarm if activated
 ALARM_TYPES = (DeviceType.SENSOR_OPENNING, DeviceType.SENSOR_PRESENCE)
 
-# Passive device types can't manually turned on or off
-PASSIVE_TYPES = (DeviceType.SENSOR_OPENNING, DeviceType.SENSOR_PRESENCE)
-
 # Types which have automatic control
 AUTO_TYPES = (DeviceType.AIR_CONDITIONING_AUTO,)

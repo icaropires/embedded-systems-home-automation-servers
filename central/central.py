@@ -24,11 +24,12 @@ class Device:
     # Idenfified by (device type, device id)
     id_counters = defaultdict(int)
 
-    def __init__(self, name, type_):
+    def __init__(self, name, type_, passive=True):
         type_ = DeviceType(type_)
 
         self.name = name
         self.type = type_
+        self.passive = passive
 
         self.id = Device.id_counters[self.type]
         Device.id_counters[self.type] += 1
@@ -129,13 +130,13 @@ class Server:
         # Also could not be just static
         return [
             # Manually activables
-            Device('Lâmpada 01 (Cozinha)', DeviceType.LAMP),
-            Device('Lâmpada 02 (Sala)', DeviceType.LAMP),
-            Device('Lâmpada 03 (Quarto 01)', DeviceType.LAMP),
-            Device('Lâmpada 04 (Quarto 02)', DeviceType.LAMP),
-            Device('Ar-Condicionado 01 (Quarto 01)', DeviceType.AIR_CONDITIONING),
-            Device('Ar-Condicionado 02 (Quarto 02)', DeviceType.AIR_CONDITIONING),
-            Device('Temperatura automática', DeviceType.AIR_CONDITIONING_AUTO),
+            Device('Lâmpada 01 (Cozinha)', DeviceType.LAMP, False),
+            Device('Lâmpada 02 (Sala)', DeviceType.LAMP, False),
+            Device('Lâmpada 03 (Quarto 01)', DeviceType.LAMP, False),
+            Device('Lâmpada 04 (Quarto 02)', DeviceType.LAMP, False),
+            Device('Ar-Condicionado 01 (Quarto 01)', DeviceType.AIR_CONDITIONING, False),
+            Device('Ar-Condicionado 02 (Quarto 02)', DeviceType.AIR_CONDITIONING, False),
+            Device('Temperatura automática', DeviceType.AIR_CONDITIONING_AUTO, False),
 
             # Passives
             Device('Sensor de Presença 01 (Sala)', DeviceType.SENSOR_PRESENCE),

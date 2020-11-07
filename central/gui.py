@@ -11,7 +11,6 @@ from prompt_toolkit.widgets import Checkbox, Frame, CheckboxList, Label
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit import print_formatted_text as print
 from prompt_toolkit.shortcuts import yes_no_dialog
-from constants import PASSIVE_TYPES
 
 
 class Gui:
@@ -66,14 +65,14 @@ class Gui:
     def get_devices_containers(self):
         active_devices_list = [
             [id_, d.name] for id_, d in self._devices.items()
-            if d.type not in PASSIVE_TYPES
+            if not d.passive
         ]
         active_devices = self.CheckboxListNoScroll(active_devices_list)
         # import pdb; pdb.set_trace()
 
         passive_devices = [
             self._passive_devices_dict[id_] for id_, d in self._devices.items()
-            if d.type in PASSIVE_TYPES
+            if d.passive
         ]
          
         return active_devices, passive_devices
