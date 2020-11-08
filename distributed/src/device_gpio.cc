@@ -3,6 +3,8 @@
 
 #include "device_gpio.h"
 
+// Ideally, one mutex to each object. Mutexes aren't copyable or moveble,
+//      so, would require many changes to do it for arbitrary number of devices
 std::mutex mutex_pin;
 
 DeviceGpio::DeviceGpio(const std::string& name, DeviceType device_type, bool passive, int gpio_addr)

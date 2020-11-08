@@ -8,6 +8,7 @@
 #include <vector>
 #include <algorithm>
 #include <mutex>
+#include <set>
 
 #include <stdio.h> 
 #include <sys/socket.h> 
@@ -56,6 +57,8 @@ class Server {
 
     // Index to make searches happen the same as in central server
     std::map<std::pair<DeviceType, int>, std::vector<DeviceGpio>::const_iterator> idx_to_device;
+
+    std::set<DeviceType> active_devices_types;
 
  public:
 

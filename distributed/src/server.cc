@@ -10,6 +10,19 @@ Server::~Server() {
 }
 
 void Server::start(const std::vector<DeviceGpio>& devices, EnvironmentSensor &env_sensor) {
+    std::set<DeviceType> devices_types;
+    for(auto const& d: devices) {
+        if(not d.passive) {
+            devices_types.insert(d.type);
+        }
+    }
+    active_devices_types = devices_types;
+
+    // Initialize all 
+    for(auto const& d: active_devices_types) {
+        apply_states(d, std::bitset<STATES_LEN>());
+    }
+
     for(auto it = devices.begin(); it < devices.end(); ++it) {
         idx_to_device[{it->type, it->id}] = it;
     }
@@ -24,6 +37,11 @@ void Server::start(const std::vector<DeviceGpio>& devices, EnvironmentSensor &en
 }
 
 void Server::stop() {
+    // Turn everything off 
+    for(auto const& d: active_devices_types) {
+        apply_states(d, std::bitset<STATES_LEN>());
+    }
+
     continue_running = false;
     is_server_up = false;
 
@@ -77,12 +95,9 @@ void Server::client_loop() {
     std::thread monitor_alarm(&Server::monitor_alarm_types_loop, this, std::ref(mutex_send));
 
     while(continue_running && is_server_up) {
-        // No need to include alarm types
-        // TODO: this can be inconsistent with the types inside alarm types,
-        //   could be checking in a constant shared array to split alarm types from non alarm types
-        DeviceType not_alarm_types[] = {DeviceType::LAMP, DeviceType::AIR_CONDITIONING};
+        DeviceType devices_types[] = {DeviceType::LAMP, DeviceType::AIR_CONDITIONING, DeviceType::SENSOR_OPENNING, DeviceType::SENSOR_PRESENCE};
 
-        for(const auto& type: not_alarm_types) {
+        for(const auto& type: devices_types) {
             auto type_int = static_cast<uint8_t>(type);
             auto states = get_states(type);
             auto [temperature, humidity] = env_sensor->get_next();
@@ -112,32 +127,62 @@ void Server::client_loop() {
  * Message in this case must be sent faster than the default period
  * */
 void Server::monitor_alarm_types_loop(std::mutex &mutex_send) {
+    DeviceType alarm_types[] = {DeviceType::SENSOR_OPENNING, DeviceType::SENSOR_PRESENCE};
+
+    const unsigned int alert_cooldown = 1e6;
+    unsigned int cooldown_count = 0;
+
+    bool alert_sent = false;
 
     while(continue_running && is_server_up) {
-        DeviceType alarm_types[] = {DeviceType::SENSOR_OPENNING, DeviceType::SENSOR_PRESENCE};
+
+        DeviceType alert_type;
+        std::bitset<STATES_LEN> alert_states;
 
         for(const auto& type: alarm_types) {
-            auto type_int = static_cast<uint8_t>(type);
-            auto states = get_states(type);
+            states = get_states(type);
 
-            if(states.none()) {
-                continue; 
+            if(states.any()) {
+                alert_type = type;
+                alert_states = states;
+
+                break;
             }
+        }
 
+        if(alert_states.none()) {
+            alert_sent = false;
+            cooldown_count = 0;
+            continue;  // Reseting to safe state
+        }
+
+        // Avoid excess of alerts
+        if(alert_sent) {
+            cooldown_count++; 
+            // std::cout << cooldown_count << std::endl;
+
+            if(cooldown_count <= alert_cooldown) {
+                continue;  // Skip alert
+            } else {
+                cooldown_count = 0; 
+            }
+        }
+
+        auto type_int = static_cast<uint8_t>(alert_type);
+        StatesMsg msg{type_int, states.to_ullong(), -1.0, -1.0};
+
+        uint8_t buff[STATES_MSG_LEN];
+        serialize_states_msg(msg, buff);
+
+        {
+            std::lock_guard<std::mutex> lock(mutex_send);
+            int sent = send(client_socket, buff, STATES_MSG_LEN, 0); 
             // std::cout << "ALARM!!!" << std::endl;
 
-            StatesMsg msg{type_int, states.to_ullong(), -1.0, -1.0};
-
-            uint8_t buff[STATES_MSG_LEN];
-            serialize_states_msg(msg, buff);
-
-            {
-                std::lock_guard<std::mutex> lock(mutex_send);
-                int sent = send(client_socket, buff, STATES_MSG_LEN, 0); 
-
-                if(sent < 0) {
-                    perror("Failed to send states message");
-                }
+            if(sent < 0) {
+                perror("Failed to send states message");
+            } else {
+                alert_sent = true;
             }
         }
 
@@ -152,7 +197,7 @@ std::bitset<STATES_LEN> Server::get_states(DeviceType device_type) {
         if(e.second->type == device_type) {
             auto read = e.second->read();
 
-            if(read == 1) {  // TODO: change to HIGH
+            if(read == HIGH) {
                 new_states.set(e.second->id);
             }
         }
