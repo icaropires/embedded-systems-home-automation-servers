@@ -5,6 +5,7 @@
 #include "constants.h"
 #include "device.h"
 #include "device_gpio.h"
+#include "environment_sensor.h"
 
 Server server;
 
@@ -40,7 +41,8 @@ int main() {
         DeviceGpio("Sensor Abertura 06 (Janela Quarto 02)", DeviceType::SENSOR_OPENNING, true, 21),
     };
 
-    server.start(devices);
+    EnvironmentSensor env_sensor("/dev/i2c-1");
+    server.start(devices, env_sensor);
 
     return 0; 
 }

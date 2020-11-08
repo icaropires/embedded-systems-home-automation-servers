@@ -1,17 +1,20 @@
 #include "server.h"
+#include "environment_sensor.h"
 
 
 Server::Server()
-    : continue_running(true), is_server_up(false) {}
+    : continue_running(true), is_server_up(false), env_sensor(nullptr) {}
 
 Server::~Server() {
     stop();
 }
 
-void Server::start(const std::vector<DeviceGpio>& devices) {
+void Server::start(const std::vector<DeviceGpio>& devices, EnvironmentSensor &env_sensor) {
     for(auto it = devices.begin(); it < devices.end(); ++it) {
         idx_to_device[{it->type, it->id}] = it;
     }
+
+    this->env_sensor = &env_sensor;
 
     std::thread t_server(&Server::server_loop, this);
     std::thread t_client(&Server::client_loop, this);
@@ -76,8 +79,9 @@ void Server::client_loop() {
         for(const auto& type: to_submit_types) {
             auto type_int = static_cast<uint8_t>(type);
             auto states = get_states(type);
+            auto [temperature, humidity] = env_sensor->get_next();
 
-            StatesMsg msg{type_int, states.to_ullong(), 25.0, 50.0};
+            StatesMsg msg{type_int, states.to_ullong(), temperature, humidity};
 
             uint8_t buff[STATES_MSG_LEN];
             serialize_states_msg(msg, buff);

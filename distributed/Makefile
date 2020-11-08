@@ -4,7 +4,7 @@ CXX = g++
 CFLAGS = -c -pedantic-errors -Wall -Wextra -Werror
 CFLAGS += -I $(INC_DIR) -I $(BME280_LIB) -I $(BCM2835_LIB)
 
-CXXFLAGS = $(CFLAGS) -std=c++14
+CXXFLAGS = $(CFLAGS) -std=c++17
 
 LDFLAGS = -lpthread -lwiringPi -lbcm2835
 BUILD_DIR = .

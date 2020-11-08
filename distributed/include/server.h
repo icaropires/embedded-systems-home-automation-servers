@@ -16,6 +16,7 @@
 #include <sys/types.h>
 #include <endian.h>
 
+#include <environment_sensor.h>
 #include "device.h"
 #include "device_gpio.h"
 #include "constants.h"
@@ -50,6 +51,8 @@ class Server {
 
     struct timeval general_timeout = {5, 0};
 
+    EnvironmentSensor *env_sensor;
+
     // Index to make searches happen the same as in central server
     std::map<std::pair<DeviceType, int>, std::vector<DeviceGpio>::const_iterator> idx_to_device;
 
@@ -59,7 +62,7 @@ class Server {
 
     ~Server();
 
-    void start(const std::vector<DeviceGpio>& devices);
+    void start(const std::vector<DeviceGpio>& devices, EnvironmentSensor &env_sensor);
 
     void stop();
 
