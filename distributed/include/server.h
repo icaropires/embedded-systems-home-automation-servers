@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <vector>
 #include <algorithm>
+#include <mutex>
 
 #include <stdio.h> 
 #include <sys/socket.h> 
@@ -71,6 +72,8 @@ class Server {
     void serialize_states_msg(StatesMsg msg, uint8_t* buff);
 
     void client_loop();
+
+    void monitor_alarm_types_loop(std::mutex &mutex_send);
 
     void apply_states(DeviceType device_type, const std::bitset<STATES_LEN>& new_states);
 

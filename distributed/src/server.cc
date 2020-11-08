@@ -73,10 +73,16 @@ void Server::client_loop() {
         exit(-1);
     }
 
-    while(continue_running && is_server_up) {
-        DeviceType to_submit_types[] = {DeviceType::LAMP, DeviceType::AIR_CONDITIONING, DeviceType::SENSOR_OPENNING, DeviceType::SENSOR_PRESENCE};
+    std::mutex mutex_send;
+    std::thread monitor_alarm(&Server::monitor_alarm_types_loop, this, std::ref(mutex_send));
 
-        for(const auto& type: to_submit_types) {
+    while(continue_running && is_server_up) {
+        // No need to include alarm types
+        // TODO: this can be inconsistent with the types inside alarm types,
+        //   could be checking in a constant shared array to split alarm types from non alarm types
+        DeviceType not_alarm_types[] = {DeviceType::LAMP, DeviceType::AIR_CONDITIONING};
+
+        for(const auto& type: not_alarm_types) {
             auto type_int = static_cast<uint8_t>(type);
             auto states = get_states(type);
             auto [temperature, humidity] = env_sensor->get_next();
@@ -86,13 +92,56 @@ void Server::client_loop() {
             uint8_t buff[STATES_MSG_LEN];
             serialize_states_msg(msg, buff);
 
-            int sent = send(client_socket, buff, STATES_MSG_LEN, 0); 
-            if(sent < 0) {
-                perror("Failed to send states message");
+            {
+                std::lock_guard<std::mutex> lock(mutex_send);
+                int sent = send(client_socket, buff, STATES_MSG_LEN, 0); 
+
+                if(sent < 0) {
+                    perror("Failed to send states message");
+                }
             }
         }
 
         usleep(1e6);
+    }
+
+    monitor_alarm.join();
+}
+
+/*
+ * Message in this case must be sent faster than the default period
+ * */
+void Server::monitor_alarm_types_loop(std::mutex &mutex_send) {
+
+    while(continue_running && is_server_up) {
+        DeviceType alarm_types[] = {DeviceType::SENSOR_OPENNING, DeviceType::SENSOR_PRESENCE};
+
+        for(const auto& type: alarm_types) {
+            auto type_int = static_cast<uint8_t>(type);
+            auto states = get_states(type);
+
+            if(states.none()) {
+                continue; 
+            }
+
+            // std::cout << "ALARM!!!" << std::endl;
+
+            StatesMsg msg{type_int, states.to_ullong(), -1.0, -1.0};
+
+            uint8_t buff[STATES_MSG_LEN];
+            serialize_states_msg(msg, buff);
+
+            {
+                std::lock_guard<std::mutex> lock(mutex_send);
+                int sent = send(client_socket, buff, STATES_MSG_LEN, 0); 
+
+                if(sent < 0) {
+                    perror("Failed to send states message");
+                }
+            }
+        }
+
+        usleep(1e3);  // Pooling
     }
 }
 
