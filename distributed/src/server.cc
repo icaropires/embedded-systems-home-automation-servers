@@ -10,6 +10,12 @@ Server::~Server() {
 }
 
 void Server::start(const std::vector<DeviceGpio>& devices, EnvironmentSensor &env_sensor) {
+    // First thing in the method, idx_to_device is very used by others
+    for(auto it = devices.begin(); it < devices.end(); ++it) {
+        idx_to_device[{it->type, it->id}] = it;
+    }
+
+    // Initialize active device types
     std::set<DeviceType> devices_types;
     for(auto const& d: devices) {
         if(not d.passive) {
@@ -18,13 +24,9 @@ void Server::start(const std::vector<DeviceGpio>& devices, EnvironmentSensor &en
     }
     active_devices_types = devices_types;
 
-    // Initialize all 
+    // Turn everything off
     for(auto const& d: active_devices_types) {
         apply_states(d, std::bitset<STATES_LEN>());
-    }
-
-    for(auto it = devices.begin(); it < devices.end(); ++it) {
-        idx_to_device[{it->type, it->id}] = it;
     }
 
     this->env_sensor = &env_sensor;
@@ -37,13 +39,13 @@ void Server::start(const std::vector<DeviceGpio>& devices, EnvironmentSensor &en
 }
 
 void Server::stop() {
+    continue_running = false;
+    is_server_up = false;
+
     // Turn everything off 
     for(auto const& d: active_devices_types) {
         apply_states(d, std::bitset<STATES_LEN>());
     }
-
-    continue_running = false;
-    is_server_up = false;
 
     close(server_socket);
     close(client_socket);

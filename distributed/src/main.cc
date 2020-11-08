@@ -18,10 +18,10 @@ void exit_handler(int) {
 }
 
 int main() { 
-    // signal(SIGINT, exit_handler);
-    // signal(SIGTERM, exit_handler);
+    signal(SIGINT, exit_handler);
+    signal(SIGTERM, exit_handler);
 
-   // MUST be same order registered in central server!
+    // MUST be same order registered in central server!
     std::vector<DeviceGpio> devices {
         DeviceGpio("Lâmpada 01 (Cozinha)", DeviceType::LAMP, false, 17),
         DeviceGpio("Lâmpada 02 (Sala)", DeviceType::LAMP, false, 18),
