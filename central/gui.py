@@ -23,7 +23,7 @@ class Gui:
         self.commands_queue = commands_queue
 
         self._status = FormattedTextControl('')
-        self._temperature_umidity = FormattedTextControl('')
+        self._temperature_humidity = FormattedTextControl('')
 
         self._devices = self.gen_devices_dict(devices)
 
@@ -71,7 +71,6 @@ class Gui:
             if not d.passive
         ]
         active_devices = self.CheckboxListNoScroll(active_devices_list)
-        # import pdb; pdb.set_trace()
 
         passive_devices = [
             self._passive_devices_dict[id_] for id_, d in self._devices.items()
@@ -84,15 +83,17 @@ class Gui:
     def gen_devices_dict(devices):
         return {(d.type, d.id): d for d in devices}
 
-    def update_temperature_umidity(self, temperature, umidity):
+    def update_temperature_humidity(self, temperature, humidity):
         reference_temperature = '-'
+        invalid_value = -1
 
-        self._temperature_umidity.text = HTML(
-            "\n<b>Environment:</b>\n\n"
-            f"<i>Temperature:</i> {temperature}\n"
-            f"<i>Umidity:</i> {umidity}\n"
-            f"<i>Reference Temperature:</i> {reference_temperature}"
-        )
+        if invalid_value not in (temperature, humidity, reference_temperature):
+            self._temperature_humidity.text = HTML(
+                "\n<b>Environment:</b>\n\n"
+                f"<i>Temperature:</i> {temperature:0.2f}\n"
+                f"<i>Humidity:</i> {humidity:0.2f}\n"
+                f"<i>Reference Temperature:</i> {reference_temperature}"
+            )
 
     def update_devices_states(self, new_states):
         def get_name_str(id_):
@@ -118,12 +119,12 @@ class Gui:
 
         while self._is_running:
             new_states = await self.states_queue.get()
-            device_type, devices_states, temperature, umidity = new_states
+            device_type, devices_states, temperature, humidity = new_states
 
             devices_states = to_local_format(device_type, devices_states)
 
             self.update_devices_states(devices_states)
-            self.update_temperature_umidity(temperature, umidity)
+            self.update_temperature_humidity(temperature, humidity)
 
             get_app().invalidate()  # Refresh
 
@@ -150,7 +151,7 @@ class Gui:
                     
                 ], padding=1),
                 HSplit([
-                    Window(self._temperature_umidity, width=30),
+                    Window(self._temperature_humidity, width=30),
                     Label(HTML(
                         "<b>Commands:</b>\n\n"
                         '<i>ctrl+p:</i> Print state to system\n'
@@ -160,7 +161,7 @@ class Gui:
                     )),
                 ], padding=1, padding_char=' ')
             ],
-            padding_char=' ', padding=2, height=len(self._devices) + 10
+            padding_char=' ', padding=2, height=len(self._devices) + 12
         )
 
         root_container = VSplit([Frame(
