@@ -3,7 +3,7 @@
 #include <map>
 #include <vector>
 
-#define HOST_CENTRAL "127.0.0.1"
+#define HOST_CENTRAL "192.168.0.53"
 #define PORT_CENTRAL 10008
 
 #define PORT_DISTRIBUTED 10108

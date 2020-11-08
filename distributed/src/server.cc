@@ -111,7 +111,6 @@ std::bitset<STATES_LEN> Server::get_states(DeviceType device_type) {
 void Server::apply_states(DeviceType device_type, const std::bitset<STATES_LEN>& new_states) {
     for(int i = 0; i <= STATES_LEN; i++) {
         bool is_on = (bool) new_states[i];  // Bitset iterates from left to right
-
         auto idx = std::make_pair(device_type, i);
 
         if(idx_to_device.count(idx)) {
