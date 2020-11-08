@@ -48,6 +48,8 @@ class Server {
     std::atomic<bool> continue_running, is_server_up;
     int server_socket = -1, client_socket = -1;
 
+    struct timeval general_timeout = {5, 0};
+
     // Index to make searches happen the same as in central server
     std::map<std::pair<DeviceType, int>, std::vector<DeviceGpio>::const_iterator> idx_to_device;
 

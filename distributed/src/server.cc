@@ -55,14 +55,6 @@ void Server::client_loop() {
         exit(-1);
     } 
 
-    struct timeval timeout;      
-    timeout.tv_sec = 2;
-    timeout.tv_usec = 0;
-
-    if (setsockopt(client_socket, SOL_SOCKET, SO_SNDTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
-        perror("Unable to set timeout");
-    }
-
     struct sockaddr_in central_addr; 
     central_addr.sin_family = AF_INET; 
     central_addr.sin_addr.s_addr = inet_addr(HOST_CENTRAL);
@@ -72,6 +64,11 @@ void Server::client_loop() {
         perror("Unable to connect to server");
         exit(-1);
     } 
+
+    if (setsockopt(client_socket, SOL_SOCKET, SO_SNDTIMEO, (char *)&general_timeout, sizeof(general_timeout)) < 0) {
+        perror("Unable to set timeout");
+        exit(-1);
+    }
 
     while(continue_running && is_server_up) {
         DeviceType to_submit_types[] = {DeviceType::LAMP, DeviceType::AIR_CONDITIONING, DeviceType::SENSOR_OPENNING, DeviceType::SENSOR_PRESENCE};
@@ -213,6 +210,11 @@ void Server::server_loop() {
         client_addr_str += ":" + std::to_string(ntohs(server_client_addr.sin_port));
 
         std::cout << "Connected to " << client_addr_str << std::endl;
+
+        if (setsockopt(client_socket, SOL_SOCKET, SO_RCVTIMEO, (char *)&general_timeout, sizeof(general_timeout)) < 0) {
+            perror("Unable to set timeout");
+            exit(-1);
+        }
 
         connection_handler(socket_server_client);
 
