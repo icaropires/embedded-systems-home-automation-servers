@@ -74,18 +74,41 @@ void Server::client_loop() {
     } 
 
     while(continue_running && is_server_up) {
-        auto device_type = static_cast<uint8_t>(DeviceType::LAMP);
-        StatesMsg msg{device_type, states.to_ullong(), 25.0, 50.0};
+        DeviceType to_submit_types[] = {DeviceType::LAMP, DeviceType::AIR_CONDITIONING, DeviceType::SENSOR_OPENNING, DeviceType::SENSOR_PRESENCE};
 
-        uint8_t buff[STATES_MSG_LEN];
-        serialize_states_msg(msg, buff);
+        for(const auto& type: to_submit_types) {
+            auto type_int = static_cast<uint8_t>(type);
+            auto states = get_states(type);
 
-        int sent = send(client_socket, buff, STATES_MSG_LEN, 0); 
-        if(sent < 0) {
-            perror("Failed to send states message"); }
+            StatesMsg msg{type_int, states.to_ullong(), 25.0, 50.0};
 
-        sleep(1);
+            uint8_t buff[STATES_MSG_LEN];
+            serialize_states_msg(msg, buff);
+
+            int sent = send(client_socket, buff, STATES_MSG_LEN, 0); 
+            if(sent < 0) {
+                perror("Failed to send states message");
+            }
+        }
+
+        usleep(1e6);
     }
+}
+
+std::bitset<STATES_LEN> Server::get_states(DeviceType device_type) {
+    std::bitset<STATES_LEN> new_states;
+    
+    for(auto const& e: idx_to_device) {
+        if(e.second->type == device_type) {
+            auto read = e.second->read();
+
+            if(read == 1) {  // TODO: change to HIGH
+                new_states.set(e.second->id);
+            }
+        }
+    }
+
+    return new_states;
 }
 
 void Server::apply_states(DeviceType device_type, const std::bitset<STATES_LEN>& new_states) {

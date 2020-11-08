@@ -7,9 +7,15 @@ DeviceGpio::DeviceGpio(const std::string& name, DeviceType device_type, bool pas
 }
 
 void DeviceGpio::turn_on() const {
-    std::cout << "Turned on " << name << std::endl;
+    std::cout << "Turned on " << name << " " << gpio_addr<< std::endl;
 }
 
 void DeviceGpio::turn_off() const {
     std::cout << "Turned off " << name << std::endl;
+}
+
+uint8_t DeviceGpio::read() const {
+    std::cout << "Read from " << name << std::endl;
+
+    return 1;
 }

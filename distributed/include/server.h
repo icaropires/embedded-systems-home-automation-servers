@@ -69,6 +69,8 @@ class Server {
 
     void apply_states(DeviceType device_type, const std::bitset<STATES_LEN>& new_states);
 
+    std::bitset<STATES_LEN> get_states(DeviceType device_type);
+
     void connection_handler(int socket);
 
     void server_loop();
