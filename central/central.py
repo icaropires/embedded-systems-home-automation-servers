@@ -1,5 +1,6 @@
 #!/bin/python3
 
+import os
 import asyncio
 import signal
 import logging
@@ -33,11 +34,6 @@ class Device:
 
         self.id = Device.id_counters[self.type]
         Device.id_counters[self.type] += 1
-
-
-async def play_alarm():
-    ...
-    # print("ALARM!!!!")
 
 
 class Server:
@@ -76,11 +72,26 @@ class Server:
             device_type, states, temperature, umidity = states_struct.unpack(payload)
             device_type = DeviceType(device_type)
 
-            if device_type in ALARM_TYPES:
-                await play_alarm()
-
             states = decode_states(states)
+
+            if device_type in ALARM_TYPES and any(states):
+                await self.play_alarm()
+
             await states_queue.put((device_type, states, temperature, umidity))
+
+    async def play_alarm(self):
+        alarm_file = 'alarm.mp3'
+
+        path = os.path.dirname(os.path.abspath(__file__))
+        path = os.path.dirname(path)
+        path = os.path.join(path, alarm_file)
+
+        await asyncio.create_subprocess_shell(
+            f'omxplayer {path}',
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL
+        )
 
     def devices_to_commands(self, selected_devices):
         'Returns one command by type'
