@@ -68,3 +68,5 @@ Without the needed hardware for the distributed, you can also run [mock.py](scri
 ## TODO
 
 * Control Temperature with on/off [#1](https://github.com/icaropires/embedded-systems-home-automation-servers/issues/1)
+* Devices are turned off on disconect only if the distributed server disconnect but not if the central
+* Exitting the UI don't close the connection, only when stops the distributed server

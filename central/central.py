@@ -16,7 +16,7 @@ from constants import (
     PORT_DISTRIBUTED,
 )
 
-from gui import Gui
+from ui import Ui
 
 
 class Device:
@@ -122,8 +122,8 @@ class Server:
 
         return commands
 
-    async def get_user_commands(self, gui_commands_queue, csv_log):
-        selected_devices = await gui_commands_queue.get()
+    async def get_user_commands(self, ui_commands_queue, csv_log):
+        selected_devices = await ui_commands_queue.get()
 
         if selected_devices is None:
             return selected_devices
@@ -132,9 +132,9 @@ class Server:
 
         return commands
 
-    async def commands_handler(self, writer, gui_commands_queue, csv_log):
+    async def commands_handler(self, writer, ui_commands_queue, csv_log):
         while True:
-            commands = await self.get_user_commands(gui_commands_queue, csv_log)
+            commands = await self.get_user_commands(ui_commands_queue, csv_log)
 
             if commands is None:
                 break
@@ -186,9 +186,9 @@ class Server:
         self.logger.info("Connected to %s:%s", host, port)
 
         states_queue = asyncio.Queue(self.max_queue_size)
-        gui_commands_queue = asyncio.Queue(self.max_queue_size)
+        ui_commands_queue = asyncio.Queue(self.max_queue_size)
 
-        gui = Gui(self.devices, states_queue, gui_commands_queue)
+        ui = Ui(self.devices, states_queue, ui_commands_queue)
 
         csv_log = self.get_csv_name(host, port)
 
@@ -196,8 +196,8 @@ class Server:
             f.write(f'device type,states,is_alarm\n')
 
         tasks = asyncio.gather(
-            gui.start(),
-            self.commands_handler(push_writer, gui_commands_queue, csv_log),
+            ui.start(),
+            self.commands_handler(push_writer, ui_commands_queue, csv_log),
             self.states_handler(writer, reader, states_queue, csv_log),
         )
 
@@ -205,8 +205,7 @@ class Server:
             await tasks
         except asyncio.CancelledError:
             tasks.cancel()
-            gui.stop()
-
+            
         try:
             await tasks
         except asyncio.CancelledError:

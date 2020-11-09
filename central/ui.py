@@ -9,7 +9,7 @@ from prompt_toolkit.layout.layout import Layout
 from prompt_toolkit.widgets import CheckboxList, Frame, Label
 
 
-class Gui:
+class Ui:
 
     class CheckboxListNoScroll(CheckboxList):
         show_scrollbar = False
