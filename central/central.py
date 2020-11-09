@@ -6,6 +6,7 @@ import signal
 import logging
 import random
 import struct
+import time
 from functools import partial
 from typing import NamedTuple
 from collections import defaultdict
@@ -50,10 +51,11 @@ class Server:
         )
         self.logger = logging.getLogger('fse_server')
 
-    async def states_handler(self, writer, reader, states_queue):
-        def decode_states(states):
-            return [s == '1' for s in f'{states:064b}']
+    @staticmethod
+    def decode_states(states):
+        return [s == '1' for s in f'{states:064b}']
 
+    async def states_handler(self, writer, reader, states_queue, csv_log):
         while True:
             states_struct = struct.Struct('>BQff')
 
@@ -69,15 +71,19 @@ class Server:
 
                 raise asyncio.CancelledError
 
-            device_type, states, temperature, umidity = states_struct.unpack(payload)
+            device_type, states, temperature, humidity = states_struct.unpack(payload)
             device_type = DeviceType(device_type)
 
-            states = decode_states(states)
+            decoded_states = self.decode_states(states)
 
-            if device_type in ALARM_TYPES and any(states):
+            if device_type in ALARM_TYPES and any(decoded_states):
+                # May delay execution if disk is slow
+                with open(csv_log, 'a') as f:
+                    f.write(f'{device_type},{states:064b},True\n')
+
                 await self.play_alarm()
 
-            await states_queue.put((device_type, states, temperature, umidity))
+            await states_queue.put((device_type, decoded_states, temperature, humidity))
 
     async def play_alarm(self):
         alarm_file = 'alarm.mp3'
@@ -93,7 +99,7 @@ class Server:
             stderr=asyncio.subprocess.DEVNULL
         )
 
-    def devices_to_commands(self, selected_devices):
+    def devices_to_commands(self, selected_devices, csv_log):
         'Returns one command by type'
         # states = {d.type: 0 for d in self.devices}
         states = {d.type: 0 for d in self.devices if d.type not in AUTO_TYPES}
@@ -104,29 +110,36 @@ class Server:
 
             states[device.type] |= 1 << device.id
 
+        for type_, type_states in states.items():
+            # May delay execution if disk is slow
+            with open(csv_log, 'a') as f:
+                f.write(f'{type_},{type_states:064b},False\n')
+
+
         commands = [
             struct.pack('>BQ', t.value, s)
             for t, s in states.items()
         ]
+
 
         # TODO: Add AUTO commands
         # commands += []
 
         return commands
 
-    async def get_user_commands(self, gui_commands_queue):
+    async def get_user_commands(self, gui_commands_queue, csv_log):
         selected_devices = await gui_commands_queue.get()
 
         if selected_devices is None:
             return selected_devices
 
-        commands = self.devices_to_commands(selected_devices)
+        commands = self.devices_to_commands(selected_devices, csv_log)
 
         return commands
 
-    async def commands_handler(self, writer, gui_commands_queue):
+    async def commands_handler(self, writer, gui_commands_queue, csv_log):
         while True:
-            commands = await self.get_user_commands(gui_commands_queue)
+            commands = await self.get_user_commands(gui_commands_queue, csv_log)
 
             if commands is None:
                 break
@@ -147,7 +160,6 @@ class Server:
             Device('Lâmpada 04 (Quarto 02)', DeviceType.LAMP, False),
             Device('Ar-Condicionado 01 (Quarto 01)', DeviceType.AIR_CONDITIONING, False),
             Device('Ar-Condicionado 02 (Quarto 02)', DeviceType.AIR_CONDITIONING, False),
-            Device('Temperatura automática', DeviceType.AIR_CONDITIONING_AUTO, False),
 
             # Passives
             Device('Sensor de Presença 01 (Sala)', DeviceType.SENSOR_PRESENCE),
@@ -158,7 +170,15 @@ class Server:
             Device('Sensor Abertura 04 (Janela Sala)', DeviceType.SENSOR_OPENNING),
             Device('Sensor Abertura 05 (Janela Quarto 01)', DeviceType.SENSOR_OPENNING),
             Device('Sensor Abertura 06 (Janela Quarto 02)', DeviceType.SENSOR_OPENNING),
+
+            Device('Temperatura automática', DeviceType.AIR_CONDITIONING_AUTO, False),
         ]
+
+    def get_csv_name(self, host, port):
+        localtime = time.localtime()
+        time_str = f'{localtime.tm_hour:02d}{localtime.tm_min:02d}{localtime.tm_sec:02d}'
+
+        return f'{time_str}_{host}_{port}_log.csv'
 
     async def connection_handler(self, reader, writer):
         host, port, *_ = writer.get_extra_info('peername')
@@ -175,10 +195,15 @@ class Server:
 
         gui = Gui(self.devices, states_queue, gui_commands_queue)
 
+        csv_log = self.get_csv_name(host, port)
+
+        with open(csv_log, 'w') as f:
+            f.write(f'device type,states,is_alarm\n')
+
         tasks = asyncio.gather(
             gui.start(),
-            self.commands_handler(push_writer, gui_commands_queue),
-            self.states_handler(writer, reader, states_queue),
+            self.commands_handler(push_writer, gui_commands_queue, csv_log),
+            self.states_handler(writer, reader, states_queue, csv_log),
         )
 
         try:

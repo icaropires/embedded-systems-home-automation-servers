@@ -29,7 +29,6 @@ int main() {
         DeviceGpio("Lâmpada 04 (Quarto 02)", DeviceType::LAMP, false, 22),
         DeviceGpio("Ar-Condicionado 01 (Quarto 01)", DeviceType::AIR_CONDITIONING, false, 23),
         DeviceGpio("Ar-Condicionado 02 (Quarto 02)", DeviceType::AIR_CONDITIONING, false, 24),
-        // // DeviceGpio("Temperatura automática", DeviceType::AIR_CONDITIONING_AUTO, false, -1),  // TODO: this is not Gpio
 
         DeviceGpio("Sensor de Presença 01 (Sala)", DeviceType::SENSOR_PRESENCE, true, 25),
         DeviceGpio("Sensor de Presença 02 (Cozinha)", DeviceType::SENSOR_PRESENCE, true, 26),
@@ -39,10 +38,13 @@ int main() {
         DeviceGpio("Sensor Abertura 04 (Janela Sala)", DeviceType::SENSOR_OPENNING, true, 16),
         DeviceGpio("Sensor Abertura 05 (Janela Quarto 01)", DeviceType::SENSOR_OPENNING, true, 20),
         DeviceGpio("Sensor Abertura 06 (Janela Quarto 02)", DeviceType::SENSOR_OPENNING, true, 21),
+
+        // // DeviceGpio("Temperatura automática", DeviceType::AIR_CONDITIONING_AUTO, false, -1),  // TODO: this is not Gpio
     };
 
     EnvironmentSensor env_sensor("/dev/i2c-1");
     server.start(devices, env_sensor);
 
+    server.stop();
     return 0; 
 }

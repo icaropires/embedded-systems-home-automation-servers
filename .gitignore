@@ -5,6 +5,7 @@ env
 venv
 .venv
 *.swp
+*_log.csv
 
 bin
 obj

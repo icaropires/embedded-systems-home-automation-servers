@@ -65,9 +65,9 @@ void Server::serialize_states_msg(StatesMsg msg, uint8_t* buff) {
     memcpy(buff+pos, (const void *) &aux_float, sizeof(msg.temperature));
     pos += sizeof(msg.temperature);
 
-    aux_float = float_to_bigendian(msg.umidity);
-    memcpy(buff+pos, (const void *) &aux_float, sizeof(msg.umidity));
-    pos += sizeof(msg.umidity);
+    aux_float = float_to_bigendian(msg.humidity);
+    memcpy(buff+pos, (const void *) &aux_float, sizeof(msg.humidity));
+    pos += sizeof(msg.humidity);
 
     assert(pos == STATES_MSG_LEN);
 }

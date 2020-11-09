@@ -29,7 +29,7 @@ class Server {
         uint8_t device_type;
         uint64_t states;
         float temperature;
-        float umidity;
+        float humidity;
     } StatesMsg;
 
     float float_to_bigendian(float value){
