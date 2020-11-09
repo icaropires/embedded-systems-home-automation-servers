@@ -1,12 +1,11 @@
 #!/bin/python3
 
 import random
-import threading
 import socket
 import struct
-from time import sleep
-from struct import Struct
+import threading
 from enum import Enum
+from time import sleep
 
 HOST_CENTRAL = ''
 PORT_CENTRAL = 10008
@@ -65,6 +64,7 @@ def commands_handler(conn):
             value = -1
             print(f'device_type = {device_type}\ntemperatura = {value}\n')
 
+
 def main():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(('', PORT_DISTRIBUTED))
@@ -75,6 +75,7 @@ def main():
 
         with conn:
             commands_handler(conn)
+
 
 if __name__ == '__main__':
     main()

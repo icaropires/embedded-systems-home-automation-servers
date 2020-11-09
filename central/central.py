@@ -1,25 +1,22 @@
 #!/bin/python3
 
-import os
 import asyncio
-import signal
 import logging
-import random
+import os
 import struct
 import time
-from functools import partial
-from typing import NamedTuple
 from collections import defaultdict
 
-from gui import Gui
 from constants import (
+    ALARM_TYPES,
+    AUTO_TYPES,
+    DeviceType,
     HOST_CENTRAL,
     PORT_CENTRAL,
     PORT_DISTRIBUTED,
-    DeviceType,
-    ALARM_TYPES,
-    AUTO_TYPES,
 )
+
+from gui import Gui
 
 
 class Device:
@@ -115,12 +112,10 @@ class Server:
             with open(csv_log, 'a') as f:
                 f.write(f'{type_},{type_states:064b},False\n')
 
-
         commands = [
             struct.pack('>BQ', t.value, s)
             for t, s in states.items()
         ]
-
 
         # TODO: Add AUTO commands
         # commands += []

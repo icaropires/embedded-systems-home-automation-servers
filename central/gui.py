@@ -1,16 +1,12 @@
 import asyncio
-import random
+
 from prompt_toolkit.application import Application, get_app
-from prompt_toolkit.buffer import Buffer
-from prompt_toolkit.layout.containers import VSplit, Window, HSplit, DynamicContainer
-from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
-from prompt_toolkit.layout.layout import Layout
-from prompt_toolkit.layout.dimension import Dimension as D
-from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.widgets import Checkbox, Frame, CheckboxList, Label
 from prompt_toolkit.formatted_text import HTML
-from prompt_toolkit import print_formatted_text as print
-from prompt_toolkit.shortcuts import yes_no_dialog
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.layout.containers import HSplit, VSplit, Window
+from prompt_toolkit.layout.controls import FormattedTextControl
+from prompt_toolkit.layout.layout import Layout
+from prompt_toolkit.widgets import CheckboxList, Frame, Label
 
 
 class Gui:
@@ -76,7 +72,7 @@ class Gui:
             self._passive_devices_dict[id_] for id_, d in self._devices.items()
             if d.passive
         ]
-         
+
         return active_devices, passive_devices
 
     @staticmethod
@@ -138,7 +134,7 @@ class Gui:
             [
                 HSplit([
                     Label(HTML("\n<b>Change states:</b>"), width=20),
-                    HSplit([self._active_devices_states,]),
+                    HSplit([self._active_devices_states]),
 
                     Label(HTML("\n<b>Passive devices:</b>"), width=20),
                     HSplit(self._passive_devices_states),
@@ -148,7 +144,7 @@ class Gui:
                         "<i><green>Green:</green></i> turned on / detecting\n"
                         "<i><red>Red:</red></i> turned off / not detecting"
                     )),
-                    
+
                 ], padding=1),
                 HSplit([
                     Window(self._temperature_humidity, width=30),
